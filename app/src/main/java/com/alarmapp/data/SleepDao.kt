@@ -29,14 +29,23 @@ interface SleepDao {
     @Update
     suspend fun updateAlarm(a: AlarmEntity)
 
-    @Query("SELECT * FROM alarm WHERE active = 1 ORDER BY id DESC LIMIT 1")
-    suspend fun activeAlarm(): AlarmEntity?
+    @Query("SELECT * FROM alarm ORDER BY minuteOfDay")
+    fun observeAlarms(): Flow<List<AlarmEntity>>
 
-    @Query("SELECT * FROM alarm WHERE active = 1 ORDER BY id DESC LIMIT 1")
-    fun observeActiveAlarm(): Flow<AlarmEntity?>
+    @Query("SELECT * FROM alarm ORDER BY minuteOfDay")
+    suspend fun alarms(): List<AlarmEntity>
 
-    @Query("UPDATE alarm SET active = 0")
-    suspend fun deactivateAlarms()
+    @Query("SELECT * FROM alarm WHERE id = :id")
+    suspend fun alarm(id: Long): AlarmEntity?
+
+    @Query("UPDATE alarm SET active = :active WHERE id = :id")
+    suspend fun setAlarmActive(id: Long, active: Boolean)
+
+    @Query("DELETE FROM alarm WHERE id = :id")
+    suspend fun deleteAlarm(id: Long)
+
+    @Query("UPDATE alarm SET windowMinutes = :window")
+    suspend fun setAlarmWindows(window: Int)
 
     // -------- Sesiones
     @Insert

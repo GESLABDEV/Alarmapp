@@ -2,6 +2,16 @@ package com.alarmapp.ui.alarms
 
 import android.text.format.DateFormat
 import android.widget.Toast
+import androidx.compose.foundation.border
+import androidx.compose.foundation.layout.aspectRatio
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.TextButton
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.mutableIntStateOf
+import com.alarmapp.alarm.AlarmSync
+import com.alarmapp.core.alarm.AlarmTimes
+import com.alarmapp.data.AlarmEntity
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -41,8 +51,6 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
-import com.alarmapp.alarm.AlarmScheduler
-import com.alarmapp.alarm.AlarmStore
 import com.alarmapp.app
 import com.alarmapp.core.sleep.CycleCalculator
 import com.alarmapp.core.sleep.SleepProfile
@@ -52,26 +60,39 @@ import com.alarmapp.ui.components.GlowButton
 import com.alarmapp.ui.components.GlowTab
 import com.alarmapp.ui.components.Overline
 import com.alarmapp.ui.components.formatTime
-import com.alarmapp.ui.home.HomeViewModel
 import com.alarmapp.ui.theme.Palette
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 
-/** Modo 1 (hora fija) y modo 3 (inverso) de RF4. */
+/** Crear ([alarmId] null) o editar una alarma. Modo 1 (hora fija) y modo 3 (inverso) de RF4. */
+@Composable
+fun AlarmSetupScreen(alarmId: Long?, onBack: () -> Unit) {
+    val repo = LocalContext.current.app.repository
+    var loaded by remember { mutableStateOf(alarmId == null) }
+    var existing by remember { mutableStateOf<AlarmEntity?>(null) }
+    LaunchedEffect(alarmId) {
+        if (alarmId != null) existing = repo.alarm(alarmId)
+        loaded = true
+    }
+    if (loaded) AlarmEditor(existing, onBack)
+    else Box(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background))
+}
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun AlarmSetupScreen(onBack: () -> Unit) {
+private fun AlarmEditor(alarm: AlarmEntity?, onBack: () -> Unit) {
     val context = LocalContext.current
     val repo = context.app.repository
     val scope = rememberCoroutineScope()
-    val alarm by repo.observeActiveAlarm().collectAsState(initial = null)
     val profile by remember { repo.observeProfile().map { p -> p?.let { SleepProfile(it.avgCycleMinutes, it.avgLatencyMinutes, it.windowMinutes) } ?: SleepProfile() } }
         .collectAsState(initial = SleepProfile())
 
-    var mode by remember(alarm) { mutableStateOf(alarm?.mode?.takeIf { it != AlarmMode.RECOMMENDED } ?: AlarmMode.FIXED) }
+    var mode by remember { mutableStateOf(alarm?.mode?.takeIf { it != AlarmMode.RECOMMENDED } ?: AlarmMode.FIXED) }
+    var days by remember { mutableIntStateOf(alarm?.days ?: AlarmTimes.ALL_DAYS) }
     val initial = alarm?.minuteOfDay ?: (6 * 60)
     val picker = rememberTimePickerState(initial / 60, initial % 60, DateFormat.is24HourFormat(context))
     var saving by remember { mutableStateOf(false) }
+    var confirmDelete by remember { mutableStateOf(false) }
 
     Column(
         Modifier
@@ -83,8 +104,8 @@ fun AlarmSetupScreen(onBack: () -> Unit) {
             .padding(horizontal = 20.dp),
     ) {
         Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(top = 4.dp)) {
-            IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Outlined.ArrowBack, "Volver") }
-            Overline("Alarma")
+            IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Outlined.ArrowBack, "Volver", tint = Palette.TextPrimary) }
+            Overline(if (alarm == null) "Nueva alarma" else "Editar alarma")
         }
         Spacer(Modifier.height(8.dp))
 
@@ -92,8 +113,8 @@ fun AlarmSetupScreen(onBack: () -> Unit) {
             Modifier.fillMaxWidth().clip(RoundedCornerShape(16.dp)).background(Palette.SurfaceHigh).padding(4.dp),
             horizontalArrangement = Arrangement.spacedBy(4.dp),
         ) {
-            Tab("Hora fija", mode == AlarmMode.FIXED, Modifier.weight(1f)) { mode = AlarmMode.FIXED }
-            Tab("Modo inverso", mode == AlarmMode.INVERSE, Modifier.weight(1f)) { mode = AlarmMode.INVERSE }
+            GlowTab("Hora fija", mode == AlarmMode.FIXED, Modifier.weight(1f)) { mode = AlarmMode.FIXED }
+            GlowTab("Modo inverso", mode == AlarmMode.INVERSE, Modifier.weight(1f)) { mode = AlarmMode.INVERSE }
         }
         Spacer(Modifier.height(12.dp))
         Text(
@@ -114,15 +135,44 @@ fun AlarmSetupScreen(onBack: () -> Unit) {
                     timeSelectorSelectedContainerColor = Palette.Amber.copy(alpha = 0.18f),
                     timeSelectorSelectedContentColor = Palette.Amber,
                     timeSelectorUnselectedContainerColor = Palette.SurfaceHigh,
+                    timeSelectorUnselectedContentColor = Palette.TextPrimary,
                     periodSelectorSelectedContainerColor = Palette.Amber.copy(alpha = 0.18f),
                     periodSelectorSelectedContentColor = Palette.Amber,
+                    periodSelectorUnselectedContentColor = Palette.TextSecondary,
                     periodSelectorBorderColor = Palette.Outline,
                 ),
             )
         }
 
+        // Días de la semana
+        Overline("Repetir")
+        Spacer(Modifier.height(10.dp))
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+            AlarmTimes.DAY_LETTERS.forEachIndexed { i, letter ->
+                val on = AlarmTimes.has(days, i)
+                Box(
+                    Modifier
+                        .weight(1f)
+                        .aspectRatio(1f)
+                        .clip(CircleShape)
+                        .background(if (on) Palette.Amber.copy(alpha = 0.18f) else Color.Transparent)
+                        .border(1.5.dp, if (on) Palette.Amber else Palette.Outline, CircleShape)
+                        .clickable {
+                            val next = AlarmTimes.toggle(days, i)
+                            if (next != 0) days = next // al menos un día
+                        },
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Text(letter, style = MaterialTheme.typography.labelLarge, color = if (on) Palette.Amber else Palette.TextSecondary)
+                }
+            }
+        }
+        Spacer(Modifier.height(6.dp))
+        Text(AlarmTimes.label(days), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        Spacer(Modifier.height(16.dp))
+
         if (mode == AlarmMode.INVERSE) {
-            val wake = HomeViewModel.nextOccurrence(picker.hour * 60 + picker.minute, System.currentTimeMillis())
+            val wake = AlarmTimes.next(picker.hour * 60 + picker.minute, days, System.currentTimeMillis())
             val beds = CycleCalculator.recommendedBedtimes(wake, profile)
             Card {
                 Overline("Acuéstate a las")
@@ -136,37 +186,50 @@ fun AlarmSetupScreen(onBack: () -> Unit) {
                     }
                 }
             }
+            Spacer(Modifier.height(16.dp))
         }
 
-        Spacer(Modifier.height(20.dp))
         GlowButton(
             text = if (saving) "Guardando…" else "Guardar alarma",
             enabled = !saving,
             onClick = {
                 saving = true
                 scope.launch {
-                    val minute = picker.hour * 60 + picker.minute
-                    repo.saveAlarm(mode, minute, alarm?.soundUri)
-                    AlarmStore.setDailyMinute(context, minute)
-                    // Sin noche en curso: se reprograma la alarma diaria de respaldo.
-                    if (AlarmStore.activeSession(context) == null) {
-                        AlarmScheduler.cancelFire(context)
-                        AlarmScheduler.armDaily(context)
-                    }
+                    repo.saveAlarm(alarm?.id, mode, picker.hour * 60 + picker.minute, days)
+                    AlarmSync.apply(context, repo.alarms())
                     Toast.makeText(context, "Alarma guardada", Toast.LENGTH_SHORT).show()
-                    onBack() // vuelve sola a la pantalla principal
+                    onBack() // vuelve sola a la lista
                 }
             },
         )
+        if (alarm != null) {
+            Spacer(Modifier.height(12.dp))
+            GlowButton(text = "Eliminar alarma", onClick = { confirmDelete = true }, color = Palette.Danger, fillAlpha = 0.08f)
+        }
         Spacer(Modifier.height(12.dp))
         Text(
-            "Suena todos los días a esta hora. Presiona \"Me voy a dormir\" para que además mida tu noche y te despierte en fase ligera.",
+            "Suena en los días elegidos aunque no presiones \"Me voy a dormir\". Si lo presionas, además mide tu noche y te despierta en fase ligera.",
             style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
         Spacer(Modifier.height(24.dp))
     }
-}
 
-@Composable
-private fun Tab(label: String, selected: Boolean, modifier: Modifier, onClick: () -> Unit) =
-    GlowTab(label, selected, modifier, onClick)
+    if (confirmDelete && alarm != null) {
+        AlertDialog(
+            onDismissRequest = { confirmDelete = false },
+            title = { Text("¿Eliminar esta alarma?", color = Palette.TextPrimary) },
+            confirmButton = {
+                TextButton(onClick = {
+                    confirmDelete = false
+                    scope.launch {
+                        repo.deleteAlarm(alarm.id)
+                        AlarmSync.apply(context, repo.alarms())
+                        onBack()
+                    }
+                }) { Text("Eliminar", color = Palette.Danger) }
+            },
+            dismissButton = { TextButton(onClick = { confirmDelete = false }) { Text("Cancelar", color = Palette.Amber) } },
+            containerColor = MaterialTheme.colorScheme.surface,
+        )
+    }
+}

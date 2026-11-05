@@ -8,6 +8,8 @@ import android.util.Base64
 import androidx.room.Database
 import androidx.room.Room
 import androidx.room.RoomDatabase
+import androidx.room.migration.Migration
+import androidx.sqlite.db.SupportSQLiteDatabase
 import net.zetetic.database.sqlcipher.SupportOpenHelperFactory
 import java.security.KeyStore
 import java.security.SecureRandom
@@ -24,7 +26,7 @@ import javax.crypto.spec.GCMParameterSpec
         IndicatorEntity::class,
         RatingEntity::class,
     ],
-    version = 1,
+    version = 2,
     exportSchema = true,
 )
 abstract class AppDatabase : RoomDatabase() {
@@ -32,6 +34,13 @@ abstract class AppDatabase : RoomDatabase() {
 
     companion object {
         private const val DB_NAME = "alarmapp.db"
+
+        /** v2: varias alarmas con días de la semana. Conserva los datos existentes. */
+        private val MIGRATION_1_2 = object : Migration(1, 2) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE alarm ADD COLUMN days INTEGER NOT NULL DEFAULT 127")
+            }
+        }
 
         /**
          * Base de datos cifrada con SQLCipher (RNF5). La clave es aleatoria y se guarda
@@ -42,6 +51,7 @@ abstract class AppDatabase : RoomDatabase() {
             val passphrase = DatabaseKey.passphrase(context)
             return Room.databaseBuilder(context, AppDatabase::class.java, DB_NAME)
                 .openHelperFactory(SupportOpenHelperFactory(passphrase))
+                .addMigrations(MIGRATION_1_2)
                 .build()
         }
     }

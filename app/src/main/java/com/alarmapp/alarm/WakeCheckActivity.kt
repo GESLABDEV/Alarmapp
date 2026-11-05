@@ -82,7 +82,7 @@ class WakeCheckActivity : ComponentActivity() {
     private fun confirm() {
         AlarmScheduler.cancelFire(this)
         AlarmService.command(this, AlarmService.ACTION_CHECK_OK)
-        AlarmScheduler.armDailyAfterWake(this)
+        AlarmScheduler.armAfterWake(this)
         getSystemService(NotificationManager::class.java).cancel(Notifications.ID_WAKE_CHECK)
         finish()
     }

@@ -52,6 +52,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
+import com.alarmapp.core.alarm.AlarmTimes
 import com.alarmapp.core.sleep.CycleCalculator
 import com.alarmapp.core.sleep.SmartWake
 import com.alarmapp.data.AlarmMode
@@ -105,15 +106,16 @@ fun HomeScreen(
                 Icon(Icons.Outlined.Alarm, null, tint = Palette.Amber)
                 Spacer(Modifier.width(14.dp))
                 Column(Modifier.weight(1f)) {
-                    val alarm = state.alarm
-                    if (alarm == null) {
-                        Text("Sin hora fija", style = MaterialTheme.typography.titleMedium)
-                        Text("Usa la hora recomendada o configura una", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    val next = vm.nextAlarm()
+                    if (next == null) {
+                        Text(if (state.totalAlarms == 0) "Sin alarmas" else "Alarmas apagadas", style = MaterialTheme.typography.titleMedium)
+                        Text("Toca para crear o activar una", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     } else {
-                        val deadline = vm.nextFixedDeadline(alarm)
-                        Text(formatTime(deadline), style = MaterialTheme.typography.displayMedium)
+                        val (alarm, at) = next
+                        Overline("Próxima alarma")
+                        Text(formatTime(at), style = MaterialTheme.typography.displayMedium)
                         Text(
-                            "${if (alarm.mode == AlarmMode.INVERSE) "Modo inverso" else "Hora fija"} · ventana ${state.profile.windowMinutes} min",
+                            "${AlarmTimes.label(alarm.days)} · ${state.alarms.size} activa${if (state.alarms.size == 1) "" else "s"} de ${state.totalAlarms}",
                             style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
                     }
@@ -197,8 +199,11 @@ private fun BedtimeSheet(
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     val sheet = rememberModalBottomSheetState(skipPartiallyExpanded = true)
-    val alarm = state.alarm
-    var mode by remember { mutableStateOf(if (alarm != null) AlarmMode.FIXED else AlarmMode.RECOMMENDED) }
+    val now = remember { System.currentTimeMillis() }
+    // Alarmas activas ordenadas por cuál suena primero.
+    val fixedOptions = remember(state.alarms) { state.alarms.map { it to vm.nextTime(it, now) }.sortedBy { it.second } }
+    var chosenAlarm by remember(fixedOptions) { mutableStateOf(fixedOptions.firstOrNull()) }
+    var mode by remember { mutableStateOf(if (fixedOptions.isNotEmpty()) AlarmMode.FIXED else AlarmMode.RECOMMENDED) }
     val options = remember { vm.recommendedWakeTimes() }
     var chosen by remember { mutableStateOf(options.getOrNull(1) ?: options.first()) }
     val (battery, charging) = remember { Permissions.battery(context) }
@@ -208,7 +213,7 @@ private fun BedtimeSheet(
 
     val deadline: Long? = when (mode) {
         AlarmMode.RECOMMENDED -> chosen
-        else -> alarm?.let { vm.nextFixedDeadline(it) }
+        else -> chosenAlarm?.second
     }
 
     ModalBottomSheet(onDismissRequest = onDismiss, sheetState = sheet, containerColor = MaterialTheme.colorScheme.surface) {
@@ -238,9 +243,20 @@ private fun BedtimeSheet(
                         TimeOption(formatTime(t), "$cycles ciclos", t == chosen, Modifier.weight(1f)) { chosen = t }
                     }
                 }
-            } else if (alarm == null) {
-                Text("Aún no tienes una hora fija.", style = MaterialTheme.typography.bodyLarge)
-                TextButton(onClick = onOpenAlarms) { Text("Configurar hora", color = Palette.Amber) }
+            } else if (fixedOptions.isEmpty()) {
+                Text("Aún no tienes alarmas activas.", style = MaterialTheme.typography.bodyLarge)
+                TextButton(onClick = onOpenAlarms) { Text("Crear alarma", color = Palette.Amber) }
+            } else {
+                Text("Elige la alarma de esta noche", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Spacer(Modifier.height(12.dp))
+                fixedOptions.chunked(3).forEach { row ->
+                    Row(horizontalArrangement = Arrangement.spacedBy(10.dp), modifier = Modifier.fillMaxWidth().padding(bottom = 10.dp)) {
+                        row.forEach { opt ->
+                            TimeOption(formatTime(opt.second), dayLabel(opt.second, now), opt == chosenAlarm, Modifier.weight(1f)) { chosenAlarm = opt }
+                        }
+                        repeat(3 - row.size) { Spacer(Modifier.weight(1f)) }
+                    }
+                }
             }
 
             deadline?.let { d ->
@@ -276,7 +292,9 @@ private fun BedtimeSheet(
                     val d = deadline ?: return@GlowButton
                     starting = true
                     scope.launch {
-                        val id = vm.startNight(context, if (mode == AlarmMode.RECOMMENDED) AlarmMode.RECOMMENDED else alarm!!.mode, d)
+                        val picked = chosenAlarm?.first
+                        val id = if (mode == AlarmMode.RECOMMENDED) vm.startNight(context, AlarmMode.RECOMMENDED, d, null)
+                        else vm.startNight(context, picked?.mode ?: AlarmMode.FIXED, d, picked?.id)
                         onStarted(id)
                     }
                 },
@@ -315,6 +333,19 @@ private fun Notice(icon: androidx.compose.ui.graphics.vector.ImageVector, text: 
         Icon(icon, null, tint = color)
         Spacer(Modifier.width(10.dp))
         Text(text, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurface)
+    }
+}
+
+/** "Hoy", "Mañana" o el día de la semana. */
+private fun dayLabel(at: Long, now: Long): String {
+    val c = Calendar.getInstance().apply { timeInMillis = at }
+    val n = Calendar.getInstance().apply { timeInMillis = now }
+    val diff = ((c.clone() as Calendar).apply { set(Calendar.HOUR_OF_DAY, 12) }.timeInMillis -
+        (n.clone() as Calendar).apply { set(Calendar.HOUR_OF_DAY, 12) }.timeInMillis) / 86_400_000L
+    return when (diff) {
+        0L -> "Hoy"
+        1L -> "Mañana"
+        else -> listOf("Dom", "Lun", "Mar", "Mié", "Jue", "Vie", "Sáb")[c.get(Calendar.DAY_OF_WEEK) - 1]
     }
 }
 

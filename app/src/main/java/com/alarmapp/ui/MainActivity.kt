@@ -16,6 +16,7 @@ import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
 import com.alarmapp.monitor.SleepMonitorService
+import com.alarmapp.ui.alarms.AlarmListScreen
 import com.alarmapp.ui.alarms.AlarmSetupScreen
 import com.alarmapp.ui.home.HomeScreen
 import com.alarmapp.ui.night.NightScreen
@@ -67,7 +68,16 @@ class MainActivity : ComponentActivity() {
                             onNightStarted = { nav.navigate("night/$it") { popUpTo("home") } },
                         )
                     }
-                    composable("alarms") { AlarmSetupScreen(onBack = { nav.popBackStack() }) }
+                    composable("alarms") {
+                        AlarmListScreen(
+                            onBack = { nav.popBackStack() },
+                            onEdit = { id -> nav.navigate("alarm/${id ?: -1}") },
+                        )
+                    }
+                    composable("alarm/{alarmId}", arguments = listOf(navArgument("alarmId") { type = NavType.LongType })) { entry ->
+                        val id = entry.arguments?.getLong("alarmId")?.takeIf { it >= 0 }
+                        AlarmSetupScreen(alarmId = id, onBack = { nav.popBackStack() })
+                    }
                     composable("settings") { SettingsScreen(onBack = { nav.popBackStack() }) }
                     composable("night/{sessionId}", arguments = listOf(navArgument("sessionId") { type = NavType.LongType })) { entry ->
                         val id = entry.arguments?.getLong("sessionId") ?: -1L

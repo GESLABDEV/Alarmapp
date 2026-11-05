@@ -1,6 +1,8 @@
 package com.alarmapp.alarm
 
 import android.app.Service
+import android.content.BroadcastReceiver
+import android.content.IntentFilter
 import android.content.Context
 import android.content.Intent
 import android.content.pm.ServiceInfo
@@ -64,11 +66,18 @@ object AlarmController {
  *  4. Escalada: volumen al máximo del canal de alarma y vibración fuerte.
  * Usa el canal de alarma, por lo que suena aunque el celular esté en silencio.
  */
+private interface AlarmSound {
+    fun setVolume(v: Float)
+    fun stop()
+}
+
 class AlarmService : Service() {
 
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
     private var sequence: Job? = null
-    private var player: MediaPlayer? = null
+    private var sound: AlarmSound? = null
+    private var deadline: Long = 0
+    private var screenOffRegistered = false
     private var vibrator: Vibrator? = null
     private var wakeLock: PowerManager.WakeLock? = null
     private var originalAlarmVolume: Int? = null
@@ -107,6 +116,8 @@ class AlarmService : Service() {
         sessionId = intent.getLongExtra(EXTRA_SESSION, -1)
         kind = runCatching { AlarmStore.Kind.valueOf(intent.getStringExtra(EXTRA_KIND)!!) }.getOrDefault(AlarmStore.Kind.DEADLINE)
         val soundAt = intent.getLongExtra(EXTRA_SOUND_AT, System.currentTimeMillis())
+        deadline = intent.getLongExtra(EXTRA_DEADLINE, soundAt)
+        watchScreenOff()
         soundStartedAt = null
 
         wakeLock = getSystemService(PowerManager::class.java)
@@ -141,7 +152,7 @@ class AlarmService : Service() {
             val steps = (RAMP_MS / 1_000).toInt()
             for (i in 0..steps) {
                 val v = START_VOLUME + (1f - START_VOLUME) * i / steps
-                player?.setVolume(v, v)
+                sound?.setVolume(v)
                 delay(1_000)
             }
             // Sin respuesta tras subir el volumen: la pantalla empieza a destellar.
@@ -159,7 +170,7 @@ class AlarmService : Service() {
     private fun escalate() {
         val am = getSystemService(AudioManager::class.java)
         am.setStreamVolume(AudioManager.STREAM_ALARM, am.getStreamMaxVolume(AudioManager.STREAM_ALARM), 0)
-        player?.setVolume(1f, 1f)
+        sound?.setVolume(1f)
         startVibration(strong = true)
         AlarmController.update { it.copy(phase = AlarmController.Phase.ESCALATED, flashing = true) }
     }
@@ -177,6 +188,7 @@ class AlarmService : Service() {
         sequence?.cancel()
         overrideSilence()
         sessionId = id
+        watchScreenOff()
         wakeLock = getSystemService(PowerManager::class.java)
             .newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "alarmapp:check")
             .apply { acquire(AlarmScheduler.WAKE_CHECK_TIMEOUT_MS + 30_000L) }
@@ -196,7 +208,7 @@ class AlarmService : Service() {
         AlarmStore.setSnoozeCount(this, count + 1)
         val id = sessionId
         scope.launch(Dispatchers.IO) { runCatching { app.repository.incrementSnooze(id) } }
-        AlarmScheduler.scheduleSnooze(this, id)
+        AlarmScheduler.scheduleSnooze(this, id, deadline)
         finish(openReport = false)
     }
 
@@ -206,8 +218,9 @@ class AlarmService : Service() {
         AlarmScheduler.cancelFire(this)
         if (kind != AlarmStore.Kind.GUARANTEED) AlarmScheduler.scheduleWakeCheck(this, id)
         AlarmStore.setSnoozeCount(this, 0)
-        AlarmStore.setActiveSession(this, null, AlarmStore.soundUri(this))
-        AlarmScheduler.armDailyAfterWake(this)
+        AlarmStore.setActiveSession(this, null)
+        AlarmStore.setLastDeadline(this, deadline)
+        AlarmScheduler.armAfterWake(this)
         // Cierra la noche y calcula el reporte (RF6). Si la base no está disponible
         // (celular bloqueado tras reinicio), el reporte se completa al abrir la app.
         val appRef = app
@@ -220,6 +233,7 @@ class AlarmService : Service() {
     private fun finish(openReport: Boolean) {
         sequence?.cancel()
         sequence = null
+        unwatchScreenOff()
         stopOutputs()
         restoreSilence()
         AlarmController.update {
@@ -241,33 +255,103 @@ class AlarmService : Service() {
         if (current < minimum) am.setStreamVolume(AudioManager.STREAM_ALARM, minimum, 0)
     }
 
+    /**
+     * Reproduce el tono elegido. Si el sistema no deja leerlo directamente (pasa en Xiaomi
+     * con algunos tonos), se reproduce como tono del sistema, que sí tiene acceso. Solo si
+     * eso también falla se usa el tono de alarma predeterminado.
+     */
     private fun startPlayer(volume: Float) {
-        val candidates = listOfNotNull(
-            AlarmStore.soundUri(this)?.let(Uri::parse),
+        val chosen = AlarmStore.soundUri(this)?.let(Uri::parse)
+        val defaults = listOfNotNull(
             RingtoneManager.getDefaultUri(RingtoneManager.TYPE_ALARM),
             RingtoneManager.getDefaultUri(RingtoneManager.TYPE_RINGTONE),
             RingtoneManager.getDefaultUri(RingtoneManager.TYPE_NOTIFICATION),
         )
-        for (uri in candidates) {
-            val mp = runCatching {
-                MediaPlayer().apply {
-                    setAudioAttributes(
-                        AudioAttributes.Builder()
-                            .setUsage(AudioAttributes.USAGE_ALARM)
-                            .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION)
-                            .build()
-                    )
-                    setDataSource(this@AlarmService, uri)
-                    isLooping = true
-                    setVolume(volume, volume)
-                    prepare()
-                    start()
-                }
-            }.getOrNull()
-            if (mp != null) { player = mp; return }
+        val attempts = buildList<() -> AlarmSound?> {
+            if (chosen != null) {
+                add { mediaSound(chosen, volume) }
+                add { ringtoneSound(chosen, volume) }
+            }
+            defaults.forEach { uri -> add { mediaSound(uri, volume) } }
+            defaults.firstOrNull()?.let { uri -> add { ringtoneSound(uri, volume) } }
+        }
+        for (attempt in attempts) {
+            val s = runCatching { attempt() }.getOrNull()
+            if (s != null) { sound = s; return }
         }
         // Sin ningún sonido disponible, la vibración fuerte sigue siendo el respaldo.
         startVibration(strong = true)
+    }
+
+    private val alarmAttributes = AudioAttributes.Builder()
+        .setUsage(AudioAttributes.USAGE_ALARM)
+        .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION)
+        .build()
+
+    private fun mediaSound(uri: Uri, volume: Float): AlarmSound {
+        val mp = MediaPlayer()
+        try {
+            mp.setAudioAttributes(alarmAttributes)
+            mp.setDataSource(this, uri)
+            mp.isLooping = true
+            mp.setVolume(volume, volume)
+            mp.prepare()
+            mp.start()
+        } catch (e: Exception) {
+            mp.release()
+            throw e
+        }
+        return object : AlarmSound {
+            override fun setVolume(v: Float) = mp.setVolume(v, v)
+            override fun stop() { runCatching { mp.stop() }; mp.release() }
+        }
+    }
+
+    private fun ringtoneSound(uri: Uri, volume: Float): AlarmSound? {
+        val r = RingtoneManager.getRingtone(this, uri) ?: return null
+        r.audioAttributes = alarmAttributes
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+            r.isLooping = true
+            r.volume = volume
+        }
+        r.play()
+        return object : AlarmSound {
+            override fun setVolume(v: Float) { if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) r.volume = v }
+            override fun stop() = r.stop()
+        }
+    }
+
+    // ---------------------------------------------------------------- pantalla
+
+    /**
+     * Si la persona presiona el botón de bloqueo mientras suena, Android apaga la pantalla.
+     * Se vuelve a encender y a mostrar la alarma (con sus destellos) hasta que la apague.
+     */
+    private val screenOffReceiver = object : BroadcastReceiver() {
+        override fun onReceive(context: Context, intent: Intent) {
+            val phase = AlarmController.state.value.phase
+            if (phase == AlarmController.Phase.IDLE) return
+            scope.launch {
+                delay(400)
+                LockScreen.wakeScreen(this@AlarmService)
+                LockScreen.launch(
+                    this@AlarmService,
+                    if (phase == AlarmController.Phase.CHECK) WakeCheckActivity::class.java else AlarmActivity::class.java,
+                )
+            }
+        }
+    }
+
+    private fun watchScreenOff() {
+        if (screenOffRegistered) return
+        ContextCompat.registerReceiver(this, screenOffReceiver, IntentFilter(Intent.ACTION_SCREEN_OFF), ContextCompat.RECEIVER_NOT_EXPORTED)
+        screenOffRegistered = true
+    }
+
+    private fun unwatchScreenOff() {
+        if (!screenOffRegistered) return
+        runCatching { unregisterReceiver(screenOffReceiver) }
+        screenOffRegistered = false
     }
 
     /**
@@ -330,8 +414,8 @@ class AlarmService : Service() {
     }
 
     private fun stopOutputs() {
-        player?.runCatching { stop(); release() }
-        player = null
+        sound?.runCatching { stop() }
+        sound = null
         vibrationJob?.cancel()
         vibrationJob = null
         vibrator?.cancel()
@@ -344,6 +428,7 @@ class AlarmService : Service() {
     }
 
     override fun onDestroy() {
+        unwatchScreenOff()
         stopOutputs()
         restoreSilence()
         scope.cancel()
@@ -359,6 +444,7 @@ class AlarmService : Service() {
         private const val EXTRA_SESSION = "session"
         private const val EXTRA_SOUND_AT = "sound_at"
         private const val EXTRA_KIND = "kind"
+        private const val EXTRA_DEADLINE = "deadline"
 
         private const val START_VOLUME = 0.1f
         private const val CHECK_VOLUME = 0.6f
@@ -366,12 +452,13 @@ class AlarmService : Service() {
         private const val ESCALATE_AFTER_MS = 120_000L
         private const val MAX_RING_MS = 60 * 60_000L
 
-        fun start(context: Context, sessionId: Long, soundAt: Long, kind: AlarmStore.Kind) {
+        fun start(context: Context, fire: AlarmStore.Fire) {
             val i = Intent(context, AlarmService::class.java)
                 .setAction(ACTION_START)
-                .putExtra(EXTRA_SESSION, sessionId)
-                .putExtra(EXTRA_SOUND_AT, soundAt)
-                .putExtra(EXTRA_KIND, kind.name)
+                .putExtra(EXTRA_SESSION, fire.sessionId)
+                .putExtra(EXTRA_SOUND_AT, fire.soundAt)
+                .putExtra(EXTRA_KIND, fire.kind.name)
+                .putExtra(EXTRA_DEADLINE, fire.deadline)
             ContextCompat.startForegroundService(context, i)
         }
 

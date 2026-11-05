@@ -113,8 +113,9 @@ fun NightScreen(sessionId: Long, onFinished: (Long) -> Unit) {
                         // Fin manual de la noche (el usuario ya se despertó).
                         AlarmScheduler.cancelAll(context)
                         SleepMonitorService.stop(context)
-                        AlarmStore.setActiveSession(context, null, AlarmStore.soundUri(context))
-                        AlarmScheduler.armDailyAfterWake(context)
+                        AlarmStore.setActiveSession(context, null)
+                        AlarmStore.setLastDeadline(context, session?.deadlineTime ?: System.currentTimeMillis())
+                        AlarmScheduler.armAfterWake(context)
                         scope.launch {
                             repo.finishSession(sessionId, System.currentTimeMillis(), actualAlarmTime = null)
                             onFinished(sessionId)

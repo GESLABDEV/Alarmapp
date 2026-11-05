@@ -9,6 +9,7 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -70,9 +71,20 @@ fun SettingsScreen(onBack: () -> Unit) {
             @Suppress("DEPRECATION") result.data?.getParcelableExtra(RingtoneManager.EXTRA_RINGTONE_PICKED_URI)
         }
         AlarmStore.setSoundUri(context, uri?.toString())
-        scope.launch { repo.updateAlarmSound(uri?.toString()) }
         soundName = soundTitle(context, uri?.toString())
     }
+
+    // Canción propia: se pide permiso permanente para leerla aunque la app esté cerrada.
+    val filePicker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
+        if (uri == null) return@rememberLauncherForActivityResult
+        runCatching {
+            context.contentResolver.takePersistableUriPermission(uri, Intent.FLAG_GRANT_READ_URI_PERMISSION)
+        }
+        AlarmStore.setSoundUri(context, uri.toString())
+        soundName = soundTitle(context, uri.toString())
+    }
+    var preview by remember { mutableStateOf<android.media.Ringtone?>(null) }
+    androidx.compose.runtime.DisposableEffect(Unit) { onDispose { preview?.stop() } }
 
     Column(
         Modifier
@@ -84,7 +96,7 @@ fun SettingsScreen(onBack: () -> Unit) {
             .padding(horizontal = 20.dp),
     ) {
         Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(top = 4.dp)) {
-            IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Outlined.ArrowBack, "Volver") }
+            IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Outlined.ArrowBack, "Volver", tint = Palette.TextPrimary) }
             Overline("Ajustes")
         }
 
@@ -99,8 +111,7 @@ fun SettingsScreen(onBack: () -> Unit) {
             },
             enabled = !nightActive && !testScheduled,
             onClick = {
-                val at = System.currentTimeMillis() + 60_000
-                AlarmScheduler.scheduleFire(context, AlarmScheduler.NO_SESSION, at, at, AlarmStore.Kind.DEADLINE)
+                AlarmScheduler.scheduleTest(context)
                 testScheduled = true
             },
         )
@@ -121,21 +132,55 @@ fun SettingsScreen(onBack: () -> Unit) {
         }
 
         Spacer(Modifier.height(16.dp))
-        Card(Modifier.clickable {
-            val existing = AlarmStore.soundUri(context)?.let(Uri::parse)
-            picker.launch(
-                Intent(RingtoneManager.ACTION_RINGTONE_PICKER)
-                    .putExtra(RingtoneManager.EXTRA_RINGTONE_TYPE, RingtoneManager.TYPE_ALARM)
-                    .putExtra(RingtoneManager.EXTRA_RINGTONE_TITLE, "Sonido de la alarma")
-                    .putExtra(RingtoneManager.EXTRA_RINGTONE_SHOW_SILENT, false)
-                    .putExtra(RingtoneManager.EXTRA_RINGTONE_SHOW_DEFAULT, true)
-                    .putExtra(RingtoneManager.EXTRA_RINGTONE_EXISTING_URI, existing)
-            )
-        }) {
-            Overline("Sonido")
+        Card {
+            Overline("Sonido de todas las alarmas")
             Spacer(Modifier.height(6.dp))
             Text(soundName, style = MaterialTheme.typography.titleMedium)
-            Text("Sube de volumen poco a poco; después se suma la vibración.", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Text("Sube de volumen poco a poco y vibra sin parar.", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Spacer(Modifier.height(14.dp))
+            Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                GlowButton(
+                    text = "Tonos",
+                    modifier = Modifier.weight(1f),
+                    height = 48.dp,
+                    onClick = {
+                        val existing = AlarmStore.soundUri(context)?.let(Uri::parse)
+                        picker.launch(
+                            Intent(RingtoneManager.ACTION_RINGTONE_PICKER)
+                                .putExtra(RingtoneManager.EXTRA_RINGTONE_TYPE, RingtoneManager.TYPE_ALARM)
+                                .putExtra(RingtoneManager.EXTRA_RINGTONE_TITLE, "Sonido de la alarma")
+                                .putExtra(RingtoneManager.EXTRA_RINGTONE_SHOW_SILENT, false)
+                                .putExtra(RingtoneManager.EXTRA_RINGTONE_SHOW_DEFAULT, true)
+                                .putExtra(RingtoneManager.EXTRA_RINGTONE_EXISTING_URI, existing)
+                        )
+                    },
+                )
+                GlowButton(
+                    text = "Mis canciones",
+                    modifier = Modifier.weight(1f),
+                    height = 48.dp,
+                    onClick = { filePicker.launch(arrayOf("audio/*")) },
+                )
+                GlowButton(
+                    text = if (preview != null) "Detener" else "Escuchar",
+                    modifier = Modifier.weight(1f),
+                    height = 48.dp,
+                    color = Palette.Cyan,
+                    onClick = {
+                        val current = preview
+                        if (current != null) {
+                            current.stop(); preview = null
+                        } else {
+                            val uri = AlarmStore.soundUri(context)?.let(Uri::parse)
+                                ?: RingtoneManager.getDefaultUri(RingtoneManager.TYPE_ALARM)
+                            preview = RingtoneManager.getRingtone(context, uri)?.also { r ->
+                                r.play()
+                                scope.launch { kotlinx.coroutines.delay(6_000); r.stop(); if (preview === r) preview = null }
+                            }
+                        }
+                    },
+                )
+            }
         }
 
         Spacer(Modifier.height(16.dp))
@@ -192,7 +237,7 @@ fun SettingsScreen(onBack: () -> Unit) {
                 TextButton(onClick = {
                     confirmDelete = false
                     // Se borran también la alarma diaria y el sonido guardados fuera de la base.
-                    AlarmStore.setDailyMinute(context, null)
+                    AlarmStore.setAlarms(context, emptyList())
                     AlarmStore.setSoundUri(context, null)
                     if (AlarmStore.activeSession(context) == null) AlarmScheduler.cancelAll(context)
                     scope.launch { repo.deleteAllData(); deleted = true }
@@ -206,5 +251,12 @@ fun SettingsScreen(onBack: () -> Unit) {
 
 private fun soundTitle(context: android.content.Context, uri: String?): String {
     val u = uri?.let(Uri::parse) ?: RingtoneManager.getDefaultUri(RingtoneManager.TYPE_ALARM) ?: return "Predeterminado"
+    if (u.scheme == "content" && u.authority?.contains("documents") == true) {
+        runCatching {
+            context.contentResolver.query(u, arrayOf(android.provider.OpenableColumns.DISPLAY_NAME), null, null, null)?.use { c ->
+                if (c.moveToFirst()) return c.getString(0).substringBeforeLast('.')
+            }
+        }
+    }
     return runCatching { RingtoneManager.getRingtone(context, u)?.getTitle(context) }.getOrNull() ?: "Predeterminado"
 }

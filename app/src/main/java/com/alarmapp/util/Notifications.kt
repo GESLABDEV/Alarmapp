@@ -21,6 +21,8 @@ object Notifications {
     const val ID_MONITOR = 10
     const val ID_ALARM = 20
     const val ID_WAKE_CHECK = 30
+    const val ID_UPCOMING = 40
+    const val CHANNEL_UPCOMING = "upcoming"
 
     private const val AMBER = 0xFFFFB547.toInt()
 
@@ -46,6 +48,14 @@ object Notifications {
             }
         )
         nm.deleteNotificationChannel(OLD_CHANNEL_ALARM)
+        nm.createNotificationChannel(
+            NotificationChannel(CHANNEL_UPCOMING, "Próxima alarma", NotificationManager.IMPORTANCE_LOW).apply {
+                description = "Aviso unas horas antes de que suene una alarma"
+                setShowBadge(false)
+                setSound(null, null)
+                enableVibration(false)
+            }
+        )
     }
 
     /** Notificación fija durante la sesión de sueño (HU2). */
@@ -97,6 +107,22 @@ object Notifications {
             .setContentIntent(full)
             .setAutoCancel(true)
             .build()
+    }
+
+    /** Aviso silencioso de la próxima alarma, con opción de omitirla esta vez. */
+    fun postUpcoming(context: Context, soundAt: Long) {
+        val time = android.text.format.DateFormat.getTimeFormat(context).format(java.util.Date(soundAt))
+        val n = NotificationCompat.Builder(context, CHANNEL_UPCOMING)
+            .setSmallIcon(R.drawable.ic_launcher_foreground)
+            .setColor(AMBER)
+            .setContentTitle("Próxima alarma: $time")
+            .setContentText("Presiona \"Me voy a dormir\" para que también mida tu noche.")
+            .setSilent(true)
+            .setCategory(NotificationCompat.CATEGORY_REMINDER)
+            .setContentIntent(openApp(context))
+            .addAction(0, "Omitir esta vez", com.alarmapp.alarm.AlarmScheduler.skipIntent(context))
+            .build()
+        runCatching { context.getSystemService(NotificationManager::class.java).notify(ID_UPCOMING, n) }
     }
 
     private fun openApp(context: Context) = PendingIntent.getActivity(

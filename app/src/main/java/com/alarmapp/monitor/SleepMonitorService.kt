@@ -12,7 +12,6 @@ import androidx.core.content.ContextCompat
 import androidx.lifecycle.LifecycleService
 import androidx.lifecycle.lifecycleScope
 import com.alarmapp.alarm.AlarmScheduler
-import com.alarmapp.alarm.AlarmStore
 import com.alarmapp.app
 import com.alarmapp.core.sleep.Epoch
 import com.alarmapp.core.sleep.PhaseEstimator
@@ -86,7 +85,7 @@ class SleepMonitorService : LifecycleService() {
                     // Fase ligera dentro de la ventana: se adelanta la alarma. Se usa
                     // AlarmManager para que el arranque sea igual de confiable que a la hora límite.
                     val soundAt = minOf(now + AlarmScheduler.LIGHT_LEAD_MS, deadline)
-                    AlarmScheduler.scheduleFire(this@SleepMonitorService, sessionId, now + 1_000, soundAt, AlarmStore.Kind.DEADLINE)
+                    AlarmScheduler.scheduleSmartWake(this@SleepMonitorService, sessionId, soundAt, deadline)
                     end()
                 }
             }

@@ -38,24 +38,29 @@ class SleepRepository(private val db: AppDatabase) {
 
     // ---------------------------------------------------------------- Alarmas
 
-    fun observeActiveAlarm(): Flow<AlarmEntity?> = dao.observeActiveAlarm()
+    fun observeAlarms(): Flow<List<AlarmEntity>> = dao.observeAlarms()
 
-    suspend fun activeAlarm(): AlarmEntity? = dao.activeAlarm()
+    suspend fun alarms(): List<AlarmEntity> = dao.alarms()
 
-    /** Guarda la alarma de hora fija o de modo inverso como la alarma activa. */
-    suspend fun saveAlarm(mode: AlarmMode, minuteOfDay: Int, soundUri: String?): AlarmEntity {
+    suspend fun alarm(id: Long): AlarmEntity? = dao.alarm(id)
+
+    /** Crea ([id] null) o actualiza una alarma. Devuelve su id. */
+    suspend fun saveAlarm(id: Long?, mode: AlarmMode, minuteOfDay: Int, days: Int): Long {
         val profile = ensureProfile()
-        dao.deactivateAlarms()
-        val alarm = AlarmEntity(
-            mode = mode, minuteOfDay = minuteOfDay, windowMinutes = profile.windowMinutes,
-            soundUri = soundUri, active = true,
-        )
-        return alarm.copy(id = dao.insertAlarm(alarm))
+        val existing = id?.let { dao.alarm(it) }
+        return if (existing != null) {
+            dao.updateAlarm(existing.copy(mode = mode, minuteOfDay = minuteOfDay, days = days, active = true))
+            existing.id
+        } else {
+            dao.insertAlarm(
+                AlarmEntity(mode = mode, minuteOfDay = minuteOfDay, windowMinutes = profile.windowMinutes, active = true, days = days)
+            )
+        }
     }
 
-    suspend fun updateAlarmSound(soundUri: String?) {
-        dao.activeAlarm()?.let { dao.updateAlarm(it.copy(soundUri = soundUri)) }
-    }
+    suspend fun setAlarmActive(id: Long, active: Boolean) = dao.setAlarmActive(id, active)
+
+    suspend fun deleteAlarm(id: Long) = dao.deleteAlarm(id)
 
     // ---------------------------------------------------------------- Sesiones
 
@@ -158,7 +163,7 @@ class SleepRepository(private val db: AppDatabase) {
         val before = session.actualAlarmTime?.let { ((session.deadlineTime - it) / 60_000L).toInt() } ?: 0
         val window = WindowTuner.adjust(profile.windowMinutes, score, session.wakeStage, before.coerceAtLeast(0))
         dao.upsertProfile(profile.copy(windowMinutes = window))
-        dao.activeAlarm()?.let { dao.updateAlarm(it.copy(windowMinutes = window)) }
+        dao.setAlarmWindows(window)
         return profile.uploadConsent
     }
 

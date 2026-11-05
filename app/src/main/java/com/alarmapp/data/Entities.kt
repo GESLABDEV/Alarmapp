@@ -1,5 +1,6 @@
 package com.alarmapp.data
 
+import androidx.room.ColumnInfo
 import androidx.room.Entity
 import androidx.room.ForeignKey
 import androidx.room.Index
@@ -25,7 +26,10 @@ data class ProfileEntity(
     companion object { const val PROFILE_ID = 1L }
 }
 
-/** 2. Alarma: modo, hora (minutos desde medianoche), ventana, sonido elegido y estado activo. */
+/**
+ * 2. Alarma: modo, hora (minutos desde medianoche), días, ventana y estado activo.
+ * Se pueden guardar varias. El tono es uno solo para todas (Ajustes); soundUri queda sin uso.
+ */
 @Entity(
     tableName = "alarm",
     foreignKeys = [ForeignKey(ProfileEntity::class, ["id"], ["profileId"], onDelete = ForeignKey.CASCADE)],
@@ -37,8 +41,10 @@ data class AlarmEntity(
     val mode: AlarmMode,
     val minuteOfDay: Int,
     val windowMinutes: Int,
-    val soundUri: String?,
+    val soundUri: String? = null,
     val active: Boolean,
+    /** Máscara de días: bit 0 = lunes … bit 6 = domingo. 127 = todos. */
+    @ColumnInfo(defaultValue = "127") val days: Int = 127,
 )
 
 /** 3. Sesión de sueño: una por noche. */
