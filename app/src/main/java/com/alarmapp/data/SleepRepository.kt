@@ -1,6 +1,9 @@
 package com.alarmapp.data
 
+import com.alarmapp.core.sleep.AgeRange
 import com.alarmapp.core.sleep.Epoch
+import com.alarmapp.core.sleep.MenstrualCycle
+import com.alarmapp.core.sleep.Sex
 import com.alarmapp.core.sleep.Insights
 import com.alarmapp.core.sleep.NightSummary
 import com.alarmapp.core.sleep.PhaseEstimator
@@ -11,7 +14,11 @@ import com.alarmapp.core.sleep.SleepStage
 import com.alarmapp.core.sleep.WindowTuner
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
+import kotlin.math.abs
 import kotlinx.coroutines.withContext
 
 /** Única puerta de entrada a los datos para la interfaz y los servicios. */
@@ -29,6 +36,49 @@ class SleepRepository(private val db: AppDatabase) {
 
     suspend fun setUploadConsent(consent: Boolean) {
         dao.upsertProfile(ensureProfile().copy(uploadConsent = consent))
+    }
+
+    /** Datos personales del cuestionario inicial o de Ajustes → Mis datos. */
+    suspend fun updatePersonal(
+        name: String?, sex: Sex?, ageRange: AgeRange?, wakeMinute: Int?, cycleDays: Int, periodDays: Int,
+    ) {
+        dao.upsertProfile(
+            ensureProfile().copy(
+                name = name?.trim()?.takeIf { it.isNotEmpty() },
+                sex = sex?.name,
+                ageRange = ageRange?.name,
+                wakeMinute = wakeMinute,
+                cycleDays = cycleDays.coerceIn(21, 45),
+                periodDays = periodDays.coerceIn(2, 10),
+            )
+        )
+    }
+
+    /** Contexto personal para Reportes. */
+    fun insightsContext(p: ProfileEntity?): Insights.Context = Insights.Context(
+        ageRange = p?.ageRange?.let { runCatching { AgeRange.valueOf(it) }.getOrNull() },
+        wakeMinute = p?.wakeMinute,
+        cycleMinutes = p?.avgCycleMinutes ?: SleepProfile.DEFAULT_CYCLE_MINUTES,
+        latencyMinutes = p?.avgLatencyMinutes ?: SleepProfile.DEFAULT_LATENCY_MINUTES,
+    )
+
+    // ---------------------------------------------------------------- Ciclo menstrual
+
+    fun observePeriods(): Flow<List<PeriodEntity>> = dao.observePeriods()
+
+    /** "Me llegó el periodo": registra el inicio (uno por día como máximo). */
+    suspend fun addPeriodStart(at: Long) {
+        val day = 86_400_000L
+        if (dao.periods().none { abs(it.startTime - at) < day }) dao.insertPeriod(PeriodEntity(startTime = at))
+    }
+
+    suspend fun deletePeriod(id: Long) = dao.deletePeriod(id)
+
+    /** Estado del ciclo en [at], con la duración aprendida de los registros. */
+    fun cycleStatus(p: ProfileEntity?, periods: List<PeriodEntity>, at: Long = System.currentTimeMillis()): MenstrualCycle.Status? {
+        if (p?.sex != Sex.FEMALE.name) return null
+        val starts = periods.map { it.startTime }
+        return MenstrualCycle.status(at, starts, MenstrualCycle.learnedCycleDays(starts, p.cycleDays), p.periodDays)
     }
 
     private suspend fun ensureProfile(): ProfileEntity = dao.profile() ?: ProfileEntity(
@@ -71,12 +121,13 @@ class SleepRepository(private val db: AppDatabase) {
         startTime: Long,
         deadlineTime: Long,
         windowMinutes: Int,
+        factors: Int = 0,
     ): Long {
         ensureProfile()
         return dao.insertSession(
             SleepSessionEntity(
                 alarmId = alarmId, mode = mode, startTime = startTime,
-                deadlineTime = deadlineTime, windowMinutes = windowMinutes,
+                deadlineTime = deadlineTime, windowMinutes = windowMinutes, factors = factors,
             )
         )
     }
@@ -90,8 +141,11 @@ class SleepRepository(private val db: AppDatabase) {
     fun observeHistory(): Flow<List<SleepSessionEntity>> = dao.observeHistory()
 
     /** Noches desde [since] listas para el resumen de Reportes. */
-    fun observeNights(since: Long): Flow<List<Insights.Night>> = dao.observeNightsSince(since).map { rows ->
+    fun observeNights(since: Long): Flow<List<Insights.Night>> = combine(
+        dao.observeNightsSince(since), dao.observePeriods(), dao.observeProfile(),
+    ) { rows, periods, profile ->
         rows.map { (s, score) ->
+            val cycle = cycleStatus(profile, periods, s.startTime)
             Insights.Night(
                 id = s.id,
                 start = s.startTime,
@@ -105,6 +159,10 @@ class SleepRepository(private val db: AppDatabase) {
                 wakeStage = s.wakeStage,
                 snoozes = s.snoozeCount,
                 rating = score,
+                snoreMinutes = s.snoreMinutes ?: 0,
+                factors = s.factors,
+                cyclePhase = cycle?.phase,
+                premenstrual = cycle?.premenstrual ?: false,
             )
         }
     }
@@ -116,7 +174,7 @@ class SleepRepository(private val db: AppDatabase) {
             IndicatorEntity(
                 sessionId = sessionId, timestamp = epoch.timestamp, movement = epoch.movement,
                 noiseDb = epoch.noiseDb, breathingRate = epoch.breathingRate,
-                breathingRegularity = epoch.breathingRegularity, stage = stage,
+                breathingRegularity = epoch.breathingRegularity, stage = stage, snoring = epoch.snoring,
             )
         )
     }
@@ -130,7 +188,7 @@ class SleepRepository(private val db: AppDatabase) {
      * resumen y actualiza lo aprendido (latencia y ciclo). Devuelve el resumen.
      */
     suspend fun finishSession(sessionId: Long, endTime: Long, actualAlarmTime: Long?): NightSummary? =
-        withContext(Dispatchers.Default) {
+        withContext(Dispatchers.Default) { finishLock.withLock {
             val session = dao.session(sessionId) ?: return@withContext null
             if (session.endTime != null) return@withContext null
             val profile = ensureProfile()
@@ -138,6 +196,8 @@ class SleepRepository(private val db: AppDatabase) {
             val stages = PhaseEstimator(profile.avgCycleMinutes).classifyNight(items.map { it.toEpoch() })
             dao.updateStages(items.mapIndexed { i, ind -> ind.id to stages[i] })
             val summary = SleepMetrics.summarize(stages)
+            // Minutos de ronquido mientras dormía (intervalos de 30 s).
+            val snoreMinutes = items.indices.count { items[it].snoring && stages[it] != SleepStage.AWAKE } / 2
 
             dao.updateSession(
                 session.copy(
@@ -150,6 +210,7 @@ class SleepRepository(private val db: AppDatabase) {
                     deepMinutes = summary.deepMinutes,
                     remMinutes = summary.remMinutes,
                     awakeMinutes = summary.awakeMinutes,
+                    snoreMinutes = snoreMinutes,
                 )
             )
             val learned = ProfileLearner.learn(profile.toCore(), summary)
@@ -157,7 +218,10 @@ class SleepRepository(private val db: AppDatabase) {
                 profile.copy(avgCycleMinutes = learned.avgCycleMinutes, avgLatencyMinutes = learned.avgLatencyMinutes)
             )
             summary
-        }
+        } }
+
+    /** Evita cerrar la misma noche dos veces si la alarma y la app lo intentan a la vez. */
+    private val finishLock = Mutex()
 
     /**
      * Cierra noches que quedaron abiertas (p. ej. la alarma se apagó con el celular bloqueado
@@ -204,4 +268,4 @@ class SleepRepository(private val db: AppDatabase) {
 
 private fun ProfileEntity.toCore() = SleepProfile(avgCycleMinutes, avgLatencyMinutes, windowMinutes)
 
-private fun IndicatorEntity.toEpoch() = Epoch(timestamp, movement, noiseDb, breathingRate, breathingRegularity)
+private fun IndicatorEntity.toEpoch() = Epoch(timestamp, movement, noiseDb, breathingRate, breathingRegularity, snoring)

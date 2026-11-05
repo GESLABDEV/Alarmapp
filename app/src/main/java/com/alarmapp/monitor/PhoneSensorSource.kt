@@ -16,6 +16,7 @@ import com.alarmapp.core.sleep.BreathingAnalyzer
 import com.alarmapp.core.sleep.EPOCH_MS
 import com.alarmapp.core.sleep.Epoch
 import com.alarmapp.core.sleep.SignalMath
+import com.alarmapp.core.sleep.SnoreDetector
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
@@ -70,6 +71,7 @@ class PhoneSensorSource(private val context: Context) : SleepDataSource {
                         noiseDb = sound?.noiseDb ?: 0f,
                         breathingRate = sound?.breathing?.ratePerMinute,
                         breathingRegularity = sound?.breathing?.regularity,
+                        snoring = sound?.snoring ?: false,
                     )
                 )
                 index++
@@ -99,7 +101,7 @@ class PhoneSensorSource(private val context: Context) : SleepDataSource {
         }
     }
 
-    private data class SoundStats(val noiseDb: Float, val breathing: BreathingAnalyzer.Result)
+    private data class SoundStats(val noiseDb: Float, val breathing: BreathingAnalyzer.Result, val snoring: Boolean)
 
     /** Escucha unos segundos, calcula indicadores y descarta el audio. */
     @SuppressLint("MissingPermission")
@@ -116,6 +118,8 @@ class PhoneSensorSource(private val context: Context) : SleepDataSource {
             val rec = record ?: return null
             val frames = (durationMs / FRAME_MS).toInt()
             val envelope = FloatArray(frames)
+            val frameDb = FloatArray(frames)
+            val zcr = FloatArray(frames)
             val frame = ShortArray(FRAME_SAMPLES)
             var rmsSum = 0.0
             var got = 0
@@ -131,6 +135,8 @@ class PhoneSensorSource(private val context: Context) : SleepDataSource {
                     if (read == 0) break
                     val rms = SignalMath.rms(frame, 0, read)
                     envelope[f] = rms.toFloat()
+                    frameDb[f] = SignalMath.rmsToDb(rms)
+                    zcr[f] = SignalMath.zeroCrossingRate(frame, read)
                     rmsSum += rms
                     got++
                 }
@@ -142,6 +148,7 @@ class PhoneSensorSource(private val context: Context) : SleepDataSource {
             return SoundStats(
                 noiseDb = SignalMath.rmsToDb(rmsSum / got),
                 breathing = BreathingAnalyzer.analyze(envelope.copyOf(got), 1000f / FRAME_MS),
+                snoring = SnoreDetector.isSnoring(frameDb.copyOf(got), zcr.copyOf(got), FRAME_MS),
             )
         }
 

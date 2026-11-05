@@ -23,6 +23,8 @@ import com.alarmapp.ui.home.HomeScreen
 import com.alarmapp.ui.insights.InsightsScreen
 import com.alarmapp.ui.night.NightScreen
 import com.alarmapp.ui.onboarding.OnboardingScreen
+import com.alarmapp.ui.profile.ProfileScreen
+import com.alarmapp.ui.profile.QuestionsScreen
 import com.alarmapp.ui.report.ReportScreen
 import com.alarmapp.ui.settings.SettingsScreen
 import com.alarmapp.ui.theme.AlarmappTheme
@@ -43,6 +45,8 @@ class MainActivity : ComponentActivity() {
         val prefs = getSharedPreferences("ui", Context.MODE_PRIVATE)
         val activeNight = SleepMonitorService.running.value
         val start = when {
+            // Primero las preguntas (también a quienes ya usaban la app antes de esta versión).
+            !prefs.getBoolean("questions_done", false) && activeNight == null -> "questions"
             !prefs.getBoolean("onboarding_done", false) -> "onboarding"
             activeNight != null -> "night/$activeNight"
             else -> "home"
@@ -60,6 +64,14 @@ class MainActivity : ComponentActivity() {
                 }
 
                 NavHost(navController = nav, startDestination = start) {
+                    composable("questions") {
+                        QuestionsScreen(onFinish = {
+                            prefs.edit().putBoolean("questions_done", true).apply()
+                            val next = if (prefs.getBoolean("onboarding_done", false)) "home" else "onboarding"
+                            nav.navigate(next) { popUpTo("questions") { inclusive = true } }
+                        })
+                    }
+                    composable("profile") { ProfileScreen(onBack = { nav.popBackStack() }) }
                     composable("onboarding") {
                         OnboardingScreen(onDone = {
                             prefs.edit().putBoolean("onboarding_done", true).apply()
@@ -87,9 +99,15 @@ class MainActivity : ComponentActivity() {
                         AlarmSetupScreen(alarmId = id, onBack = { nav.popBackStack() })
                     }
                     composable("insights") {
-                        InsightsScreen(onBack = { nav.popBackStack() }, onOpenNight = { nav.navigate("report/$it") })
+                        InsightsScreen(
+                            onBack = { nav.popBackStack() },
+                            onOpenNight = { nav.navigate("report/$it") },
+                            onOpenProfile = { nav.navigate("profile") },
+                        )
                     }
-                    composable("settings") { SettingsScreen(onBack = { nav.popBackStack() }) }
+                    composable("settings") {
+                        SettingsScreen(onBack = { nav.popBackStack() }, onOpenProfile = { nav.navigate("profile") })
+                    }
                     composable("night/{sessionId}", arguments = listOf(navArgument("sessionId") { type = NavType.LongType })) { entry ->
                         val id = entry.arguments?.getLong("sessionId") ?: -1L
                         AlarmappTheme(night = true) {

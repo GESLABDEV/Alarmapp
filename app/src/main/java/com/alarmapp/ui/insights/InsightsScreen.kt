@@ -64,12 +64,14 @@ private val PERIODS = listOf(7 to "7 días", 30 to "30 días", 90 to "90 días")
 
 /** Sección Reportes: resumen de varias noches, observaciones e historial. */
 @Composable
-fun InsightsScreen(onBack: () -> Unit, onOpenNight: (Long) -> Unit) {
+fun InsightsScreen(onBack: () -> Unit, onOpenNight: (Long) -> Unit, onOpenProfile: () -> Unit) {
     val repo = LocalContext.current.app.repository
     var days by rememberSaveable { mutableIntStateOf(7) }
     val since = remember(days) { System.currentTimeMillis() - days * 86_400_000L }
     val all by remember(since) { repo.observeNights(since) }.collectAsState(initial = null)
-    val summary = remember(all) { all?.let { Insights.summarize(it) } }
+    val profile by repo.observeProfile().collectAsState(initial = null)
+    val ctx = remember(profile) { repo.insightsContext(profile) }
+    val summary = remember(all, ctx) { all?.let { Insights.summarize(it, ctx) } }
 
     Column(
         Modifier
@@ -99,6 +101,9 @@ fun InsightsScreen(onBack: () -> Unit, onOpenNight: (Long) -> Unit) {
         val s = summary ?: return@Column
         val counted = nights.filter { it.counts }
 
+        PlanCard(s.plan, onOpenProfile)
+        Spacer(Modifier.height(16.dp))
+
         if (counted.isEmpty()) {
             Card {
                 Text("Aún no hay noches en este periodo", style = MaterialTheme.typography.titleMedium)
@@ -123,6 +128,10 @@ fun InsightsScreen(onBack: () -> Unit, onOpenNight: (Long) -> Unit) {
                     Modifier.weight(1f),
                 )
                 StatCard("Regularidad", s.bedtimeSpreadMinutes?.let { "± ${formatDuration(it)}" } ?: "—", Modifier.weight(1f))
+            }
+            Spacer(Modifier.height(12.dp))
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                StatCard("Ronquidos por noche", s.avgSnoreMinutes?.let { if (it == 0) "No detectados" else "≈ ${formatDuration(it)}" } ?: "—", Modifier.weight(1f))
             }
             Spacer(Modifier.height(16.dp))
 
@@ -180,6 +189,34 @@ fun InsightsScreen(onBack: () -> Unit, onOpenNight: (Long) -> Unit) {
             }
         }
         Spacer(Modifier.height(28.dp))
+    }
+}
+
+/** Sugerencia para mejorar el ciclo de sueño: a qué hora acostarse. */
+@Composable
+private fun PlanCard(plan: Insights.Plan?, onOpenProfile: () -> Unit) {
+    Card(accent = Palette.Primary) {
+        Overline("Tu plan para esta noche", Palette.PrimaryText)
+        Spacer(Modifier.height(8.dp))
+        if (plan == null) {
+            Text("Cuéntanos a qué hora sueles despertarte", style = MaterialTheme.typography.titleMedium)
+            Text(
+                "Con eso te sugerimos a qué hora acostarte para completar tus ciclos de sueño.",
+                style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            androidx.compose.material3.TextButton(onClick = onOpenProfile) { Text("Completar mis datos", color = Palette.PrimaryText) }
+        } else {
+            val now = System.currentTimeMillis()
+            val bed = com.alarmapp.core.alarm.AlarmTimes.next(plan.bedtimeMinute, com.alarmapp.core.alarm.AlarmTimes.ALL_DAYS, now - 60 * 60_000L)
+            val wake = com.alarmapp.core.alarm.AlarmTimes.next(plan.wakeMinute, com.alarmapp.core.alarm.AlarmTimes.ALL_DAYS, now)
+            Text("Acuéstate a las ${formatTime(bed)}", style = MaterialTheme.typography.headlineMedium, color = Palette.PrimaryText)
+            Spacer(Modifier.height(4.dp))
+            Text(
+                "Para despertar a las ${formatTime(wake)} al final de un ciclo: ${plan.cycles} ciclos completos (${formatDuration(plan.sleepMinutes)}), " +
+                    "contando lo que sueles tardar en dormirte. Se ajusta con tus ciclos reales.",
+                style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
     }
 }
 
@@ -269,7 +306,8 @@ private fun NightRow(n: Insights.Night, onClick: () -> Unit) {
         Column(Modifier.weight(1f)) {
             Text(dateFmt.format(Date(n.start)).replaceFirstChar { it.uppercase() }, style = MaterialTheme.typography.titleMedium)
             Text(
-                if (n.counts) "${formatTime(n.start)} → ${formatTime(n.end)}" + (n.rating?.let { " · te sentiste $it/5" } ?: "")
+                if (n.counts) "${formatTime(n.start)} → ${formatTime(n.end)}" + (n.rating?.let { " · te sentiste $it/5" } ?: "") +
+                    (n.cyclePhase?.let { " · fase ${it.label.lowercase()}" } ?: "")
                 else "Sesión corta · no cuenta en el resumen",
                 style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant,
             )

@@ -55,7 +55,7 @@ import com.alarmapp.ui.theme.Palette
 import kotlinx.coroutines.launch
 
 @Composable
-fun SettingsScreen(onBack: () -> Unit) {
+fun SettingsScreen(onBack: () -> Unit, onOpenProfile: () -> Unit) {
     val context = LocalContext.current
     val repo = context.app.repository
     val scope = rememberCoroutineScope()
@@ -116,6 +116,19 @@ fun SettingsScreen(onBack: () -> Unit) {
                 testScheduled = true
             },
         )
+        Spacer(Modifier.height(16.dp))
+        Card(Modifier.clickable(onClick = onOpenProfile)) {
+            Overline("Mis datos")
+            Spacer(Modifier.height(6.dp))
+            Text(
+                profile?.name?.let { "Hola, $it" } ?: "Completa tus datos",
+                style = MaterialTheme.typography.titleMedium,
+            )
+            Text(
+                "Nombre, sexo, edad, hora de despertar y ciclo. Ajustan tus reportes; se guardan cifrados solo en tu celular.",
+                style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
         Spacer(Modifier.height(16.dp))
         Card {
             Overline("Lo que la app aprendió de ti")

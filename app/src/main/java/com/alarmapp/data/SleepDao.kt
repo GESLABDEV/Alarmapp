@@ -97,6 +97,19 @@ interface SleepDao {
         items.forEach { (id, stage) -> updateIndicatorStage(id, stage) }
     }
 
+    // -------- Periodos
+    @Insert
+    suspend fun insertPeriod(p: PeriodEntity): Long
+
+    @Query("DELETE FROM period WHERE id = :id")
+    suspend fun deletePeriod(id: Long)
+
+    @Query("SELECT * FROM period ORDER BY startTime")
+    fun observePeriods(): Flow<List<PeriodEntity>>
+
+    @Query("SELECT * FROM period ORDER BY startTime")
+    suspend fun periods(): List<PeriodEntity>
+
     // -------- Calificaciones
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun upsertRating(r: RatingEntity)

@@ -25,8 +25,9 @@ import javax.crypto.spec.GCMParameterSpec
         SleepSessionEntity::class,
         IndicatorEntity::class,
         RatingEntity::class,
+        PeriodEntity::class,
     ],
-    version = 2,
+    version = 3,
     exportSchema = true,
 )
 abstract class AppDatabase : RoomDatabase() {
@@ -42,6 +43,23 @@ abstract class AppDatabase : RoomDatabase() {
             }
         }
 
+        /** v3: datos personales, factores del día, ronquidos y periodos. Conserva los datos. */
+        private val MIGRATION_2_3 = object : Migration(2, 3) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE profile ADD COLUMN name TEXT")
+                db.execSQL("ALTER TABLE profile ADD COLUMN sex TEXT")
+                db.execSQL("ALTER TABLE profile ADD COLUMN ageRange TEXT")
+                db.execSQL("ALTER TABLE profile ADD COLUMN wakeMinute INTEGER")
+                db.execSQL("ALTER TABLE profile ADD COLUMN cycleDays INTEGER NOT NULL DEFAULT 28")
+                db.execSQL("ALTER TABLE profile ADD COLUMN periodDays INTEGER NOT NULL DEFAULT 5")
+                db.execSQL("ALTER TABLE sleep_session ADD COLUMN factors INTEGER NOT NULL DEFAULT 0")
+                db.execSQL("ALTER TABLE sleep_session ADD COLUMN snoreMinutes INTEGER")
+                db.execSQL("ALTER TABLE indicator ADD COLUMN snoring INTEGER NOT NULL DEFAULT 0")
+                db.execSQL("CREATE TABLE IF NOT EXISTS `period` (`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `startTime` INTEGER NOT NULL)")
+                db.execSQL("CREATE INDEX IF NOT EXISTS `index_period_startTime` ON `period` (`startTime`)")
+            }
+        }
+
         /**
          * Base de datos cifrada con SQLCipher (RNF5). La clave es aleatoria y se guarda
          * envuelta con una llave del Android Keystore, que nunca sale del hardware seguro.
@@ -51,7 +69,7 @@ abstract class AppDatabase : RoomDatabase() {
             val passphrase = DatabaseKey.passphrase(context)
             return Room.databaseBuilder(context, AppDatabase::class.java, DB_NAME)
                 .openHelperFactory(SupportOpenHelperFactory(passphrase))
-                .addMigrations(MIGRATION_1_2)
+                .addMigrations(MIGRATION_1_2, MIGRATION_2_3)
                 .build()
         }
     }

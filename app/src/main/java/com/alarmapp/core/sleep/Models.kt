@@ -26,6 +26,8 @@ data class Epoch(
     val noiseDb: Float,
     val breathingRate: Float?,
     val breathingRegularity: Float?,
+    /** Se detectó ronquido en este intervalo (estimación). */
+    val snoring: Boolean = false,
 )
 
 /** Lo que la IA aprende de cada persona (tabla Perfil). */

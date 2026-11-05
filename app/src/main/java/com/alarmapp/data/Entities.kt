@@ -22,6 +22,16 @@ data class ProfileEntity(
     val avgLatencyMinutes: Double,
     val windowMinutes: Int,
     val uploadConsent: Boolean = false,
+    // Datos personales (v3). Opcionales; nunca se envían al servidor.
+    val name: String? = null,
+    /** Nombre de [com.alarmapp.core.sleep.Sex]. */
+    val sex: String? = null,
+    /** Nombre de [com.alarmapp.core.sleep.AgeRange]. */
+    val ageRange: String? = null,
+    /** Hora habitual de despertar, minutos desde medianoche. */
+    val wakeMinute: Int? = null,
+    @ColumnInfo(defaultValue = "28") val cycleDays: Int = 28,
+    @ColumnInfo(defaultValue = "5") val periodDays: Int = 5,
 ) {
     companion object { const val PROFILE_ID = 1L }
 }
@@ -79,6 +89,9 @@ data class SleepSessionEntity(
     val deepMinutes: Int? = null,
     val remMinutes: Int? = null,
     val awakeMinutes: Int? = null,
+    /** Factores del día marcados al acostarse (máscara de DayFactor). */
+    @ColumnInfo(defaultValue = "0") val factors: Int = 0,
+    val snoreMinutes: Int? = null,
 )
 
 /** 4. Indicadores: un registro cada 30 segundos. Nunca audio. */
@@ -96,6 +109,14 @@ data class IndicatorEntity(
     val breathingRate: Float?,
     val breathingRegularity: Float?,
     val stage: SleepStage,
+    @ColumnInfo(defaultValue = "0") val snoring: Boolean = false,
+)
+
+/** Inicio de cada periodo menstrual registrado (dato de salud: solo local y cifrado). */
+@Entity(tableName = "period", indices = [Index("startTime")])
+data class PeriodEntity(
+    @PrimaryKey(autoGenerate = true) val id: Long = 0,
+    val startTime: Long,
 )
 
 /** 5. Calificación: respuesta matutina 1–5, como máximo una por sesión. */

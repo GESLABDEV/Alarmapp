@@ -28,6 +28,14 @@ object SignalMath {
         return sqrt(sum / (to - from))
     }
 
+    /** Proporción de cambios de signo entre muestras (0..1): baja en sonidos graves como el ronquido. */
+    fun zeroCrossingRate(samples: ShortArray, count: Int = samples.size): Float {
+        if (count < 2) return 0f
+        var z = 0
+        for (i in 1 until count) if ((samples[i] >= 0) != (samples[i - 1] >= 0)) z++
+        return z.toFloat() / (count - 1)
+    }
+
     /** Desviación media absoluta de la magnitud del acelerómetro: cuánto se movió el colchón. */
     fun movementIndex(magnitudes: FloatArray, count: Int = magnitudes.size): Float {
         if (count <= 1) return 0f

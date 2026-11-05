@@ -39,6 +39,7 @@ import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.viewModelScope
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.alarmapp.app
+import com.alarmapp.core.sleep.DayFactor
 import com.alarmapp.core.sleep.SleepStage
 import com.alarmapp.data.SleepSessionEntity
 import com.alarmapp.sync.SummaryUploadWorker
@@ -143,6 +144,17 @@ fun ReportScreen(onBack: () -> Unit, vm: ReportViewModel = viewModel()) {
             Row(Modifier.fillMaxWidth()) {
                 Metric("Alarma", s.actualAlarmTime?.let { formatTime(it) } ?: "Terminaste tú", Modifier.weight(1f))
                 Metric("Pospuestas", "${s.snoozeCount}", Modifier.weight(1f))
+            }
+            Spacer(Modifier.height(16.dp))
+            Row(Modifier.fillMaxWidth()) {
+                Metric("Ronquidos", s.snoreMinutes?.let { if (it == 0) "No detectados" else "≈ ${formatDuration(it)}" } ?: "—", Modifier.weight(1f))
+            }
+            val factors = DayFactor.from(s.factors)
+            if (factors.isNotEmpty()) {
+                Spacer(Modifier.height(16.dp))
+                Text("Marcaste", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Spacer(Modifier.height(4.dp))
+                Text(factors.joinToString(" · ") { it.label }, style = MaterialTheme.typography.titleMedium)
             }
         }
 

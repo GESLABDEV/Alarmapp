@@ -1,6 +1,13 @@
 package com.alarmapp.ui.home
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.mutableIntStateOf
+import com.alarmapp.core.sleep.DayFactor
+import com.alarmapp.core.sleep.MenstrualCycle
+import kotlinx.coroutines.delay
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -94,8 +101,16 @@ fun HomeScreen(
     ) {
         Row(Modifier.fillMaxWidth().padding(top = 8.dp), verticalAlignment = Alignment.CenterVertically) {
             Column(Modifier.weight(1f)) {
-                Overline(greeting())
-                Text("Alarmapp", style = MaterialTheme.typography.headlineMedium)
+                // El saludo se actualiza solo cuando cambia la hora.
+                var hour by remember { mutableIntStateOf(Calendar.getInstance().get(Calendar.HOUR_OF_DAY)) }
+                LaunchedEffect(Unit) {
+                    while (true) { delay(60_000); hour = Calendar.getInstance().get(Calendar.HOUR_OF_DAY) }
+                }
+                Overline("Alarmapp", Palette.PrimaryText)
+                Text(
+                    greeting(hour) + (state.name?.let { ", $it" } ?: ""),
+                    style = MaterialTheme.typography.headlineMedium,
+                )
             }
             IconButton(onClick = onOpenInsights) {
                 Icon(Icons.Outlined.BarChart, contentDescription = "Reportes", tint = Palette.PrimaryText)
@@ -137,6 +152,11 @@ fun HomeScreen(
         SleepButton(onClick = { sheetOpen = true })
 
         Spacer(Modifier.height(40.dp))
+
+        if (state.isFemale) {
+            CycleCard(state.cycle, onPeriodToday = vm::periodStartedToday)
+            Spacer(Modifier.height(16.dp))
+        }
 
         // Última noche (cian: color de la mañana)
         state.lastNight?.let { s ->
@@ -240,6 +260,7 @@ private fun BedtimeSheet(
     val options = remember { vm.recommendedWakeTimes() }
     var chosen by remember { mutableStateOf(options.getOrNull(1) ?: options.first()) }
     val (battery, charging) = remember { Permissions.battery(context) }
+    var factors by remember { mutableIntStateOf(0) }
     val alarmReady = remember { Permissions.alarmReady(context) }
     val micOk = remember { Permissions.mic(context) }
     var starting by remember { mutableStateOf(false) }
@@ -292,6 +313,12 @@ private fun BedtimeSheet(
                 }
             }
 
+            // Factores del día: con varias noches, Reportes muestra cuáles afectan tu sueño.
+            Spacer(Modifier.height(18.dp))
+            Text("¿Algo de hoy? (opcional)", style = MaterialTheme.typography.titleMedium)
+            Spacer(Modifier.height(8.dp))
+            FactorChips(factors) { factors = it }
+
             deadline?.let { d ->
                 Spacer(Modifier.height(16.dp))
                 val from = SmartWake.windowStart(d, state.profile.windowMinutes)
@@ -326,8 +353,8 @@ private fun BedtimeSheet(
                     starting = true
                     scope.launch {
                         val picked = chosenAlarm?.first
-                        val id = if (mode == AlarmMode.RECOMMENDED) vm.startNight(context, AlarmMode.RECOMMENDED, d, null)
-                        else vm.startNight(context, picked?.mode ?: AlarmMode.FIXED, d, picked?.id)
+                        val id = if (mode == AlarmMode.RECOMMENDED) vm.startNight(context, AlarmMode.RECOMMENDED, d, null, factors)
+                        else vm.startNight(context, picked?.mode ?: AlarmMode.FIXED, d, picked?.id, factors)
                         onStarted(id)
                     }
                 },
@@ -382,8 +409,58 @@ private fun dayLabel(at: Long, now: Long): String {
     }
 }
 
-private fun greeting(): String = when (Calendar.getInstance().get(Calendar.HOUR_OF_DAY)) {
+private fun greeting(hour: Int): String = when (hour) {
     in 5..11 -> "Buenos días"
     in 12..18 -> "Buenas tardes"
     else -> "Buenas noches"
 }
+
+/** Factores del día, selección múltiple. */
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+private fun FactorChips(mask: Int, onChange: (Int) -> Unit) {
+    FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        DayFactor.entries.forEach { f ->
+            val on = mask and f.bit != 0
+            val shape = RoundedCornerShape(20.dp)
+            Text(
+                f.label,
+                style = MaterialTheme.typography.labelLarge,
+                color = if (on) Palette.PrimaryText else Palette.TextSecondary,
+                modifier = Modifier
+                    .clip(shape)
+                    .background(if (on) Palette.PrimarySoft else Color.Transparent)
+                    .border(1.dp, if (on) Palette.Primary else Palette.Outline, shape)
+                    .clickable { onChange(mask xor f.bit) }
+                    .padding(horizontal = 14.dp, vertical = 10.dp),
+            )
+        }
+    }
+}
+
+/** Ciclo menstrual en la pantalla principal (solo si la persona eligió Mujer). */
+@Composable
+private fun CycleCard(status: MenstrualCycle.Status?, onPeriodToday: () -> Unit) {
+    val context = LocalContext.current
+    Card(accent = Palette.Rem) {
+        Overline("Tu ciclo", Palette.Rem)
+        Spacer(Modifier.height(6.dp))
+        if (status == null) {
+            Text("Registra el inicio de tu periodo", style = MaterialTheme.typography.titleMedium)
+            Text(
+                "Así relacionamos tu ciclo con tu sueño en Reportes.",
+                style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        } else {
+            Text("Día ${status.cycleDay} · fase ${status.phase.label.lowercase()}", style = MaterialTheme.typography.titleLarge)
+            val next = android.text.format.DateFormat.getMediumDateFormat(context).format(java.util.Date(status.nextPeriod))
+            Text(
+                (if (status.premenstrual) "Días previos al periodo · " else "") + "próximo periodo ≈ $next",
+                style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+        Spacer(Modifier.height(12.dp))
+        GlowButton(text = "Me llegó el periodo hoy", onClick = onPeriodToday, color = Palette.Rem, height = 46.dp)
+    }
+}
+
