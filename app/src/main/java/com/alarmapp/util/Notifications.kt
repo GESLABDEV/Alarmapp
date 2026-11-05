@@ -15,7 +15,9 @@ import com.alarmapp.ui.MainActivity
 
 object Notifications {
     const val CHANNEL_MONITOR = "monitor"
-    const val CHANNEL_ALARM = "alarm"
+    /** Canal nuevo con "ignorar No molestar"; el anterior ("alarm") se elimina. */
+    const val CHANNEL_ALARM = "alarm_v2"
+    private const val OLD_CHANNEL_ALARM = "alarm"
     const val ID_MONITOR = 10
     const val ID_ALARM = 20
     const val ID_WAKE_CHECK = 30
@@ -40,8 +42,10 @@ object Notifications {
                 enableVibration(false)
                 lockscreenVisibility = Notification.VISIBILITY_PUBLIC
                 lightColor = Color.rgb(255, 181, 71)
+                setBypassDnd(true)
             }
         )
+        nm.deleteNotificationChannel(OLD_CHANNEL_ALARM)
     }
 
     /** Notificación fija durante la sesión de sueño (HU2). */

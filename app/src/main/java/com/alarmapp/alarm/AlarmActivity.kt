@@ -29,10 +29,12 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableLongStateOf
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.lerp
@@ -60,7 +62,7 @@ class AlarmActivity : ComponentActivity() {
         setContent {
             AlarmappTheme {
                 val state by AlarmController.state.collectAsState()
-                LaunchedEffect(state.light) { setBrightness(state.light) }
+                LaunchedEffect(state.light, state.flashing) { setBrightness(if (state.flashing) 1f else state.light) }
                 LaunchedEffect(state.dismissedSessionId, state.phase) {
                     val dismissed = state.dismissedSessionId
                     if (dismissed != null) {
@@ -108,10 +110,23 @@ private fun AlarmScreen(state: AlarmController.State, onSnooze: () -> Unit, onDi
     var now by remember { mutableLongStateOf(System.currentTimeMillis()) }
     LaunchedEffect(Unit) { while (true) { now = System.currentTimeMillis(); delay(10_000) } }
 
-    val top = sunrise(light * 0.85f)
-    val bottom = sunrise(light)
-    // Texto crema sobre el amanecer: nunca negro.
+    // Destellos si la persona no responde: 1 por segundo (muy por debajo de 3 por segundo,
+    // el límite de seguridad para personas fotosensibles).
+    var flashOn by remember { mutableStateOf(false) }
+    LaunchedEffect(state.flashing) {
+        flashOn = false
+        while (state.flashing) { delay(500); flashOn = !flashOn }
+    }
+    val flashColor = if (state.phase == AlarmController.Phase.ESCALATED) Color.White else Palette.Cream
+
+    val top = if (flashOn) flashColor else sunrise(light * 0.85f)
+    val bottom = if (flashOn) flashColor else sunrise(light)
+    // Texto crema sobre el amanecer: nunca negro. Durante los destellos va sobre un panel oscuro.
     val content = Palette.Cream
+    val panel = if (state.flashing) Modifier
+        .clip(RoundedCornerShape(24.dp))
+        .background(Palette.Night.copy(alpha = 0.72f))
+        .padding(16.dp) else Modifier
 
     Column(
         Modifier
@@ -124,7 +139,7 @@ private fun AlarmScreen(state: AlarmController.State, onSnooze: () -> Unit, onDi
         verticalArrangement = Arrangement.SpaceBetween,
     ) {
         Spacer(Modifier.height(40.dp))
-        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+        Column(panel, horizontalAlignment = Alignment.CenterHorizontally) {
             Text(
                 when (state.phase) {
                     AlarmController.Phase.LIGHT -> "Amaneciendo…"
@@ -137,7 +152,7 @@ private fun AlarmScreen(state: AlarmController.State, onSnooze: () -> Unit, onDi
             Text(formatTime(now), style = MaterialTheme.typography.displayLarge, color = content)
         }
 
-        Column(Modifier.fillMaxWidth()) {
+        Column(Modifier.fillMaxWidth().then(panel)) {
             GlowButton(
                 text = "Apagar",
                 onClick = onDismiss,

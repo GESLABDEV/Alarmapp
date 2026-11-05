@@ -69,6 +69,11 @@ fun PermissionList() {
             "Para que la pantalla de la alarma se abra sola con el celular bloqueado o la pantalla apagada.",
             Permissions::overlay,
         ) { open(Permissions.overlaySettings(context)) },
+        Item(
+            "Sonar en No molestar y silencio",
+            "Para que la alarma y \"¿Sigues despierto?\" suenen aunque el celular esté en silencio o en No molestar. Busca Alarmapp y actívalo.",
+            Permissions::dnd,
+        ) { open(Permissions.dndSettings()) },
         Item("Micrófono", "Analiza el sonido en el celular para estimar tu respiración. Nunca se graba ni se guarda audio.", Permissions::mic) {
             runtime.launch(Manifest.permission.RECORD_AUDIO)
         },

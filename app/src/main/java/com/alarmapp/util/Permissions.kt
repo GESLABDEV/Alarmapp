@@ -30,11 +30,16 @@ object Permissions {
     fun batteryUnrestricted(c: Context): Boolean =
         c.getSystemService(PowerManager::class.java).isIgnoringBatteryOptimizations(c.packageName)
 
+    /** Acceso a "No molestar": deja que la alarma suene aunque esté activo. */
+    fun dnd(c: Context): Boolean = c.getSystemService(NotificationManager::class.java).isNotificationPolicyAccessGranted
+
+    fun dndSettings(): Intent = Intent(Settings.ACTION_NOTIFICATION_POLICY_ACCESS_SETTINGS)
+
     /** Permite abrir la alarma desde segundo plano, encima del bloqueo o de otra app. */
     fun overlay(c: Context): Boolean = Settings.canDrawOverlays(c)
 
     /** Lo indispensable para que la alarma suene y se vea con el celular bloqueado (RNF2). */
-    fun alarmReady(c: Context) = notifications(c) && exactAlarms(c) && fullScreen(c) && overlay(c)
+    fun alarmReady(c: Context) = notifications(c) && exactAlarms(c) && fullScreen(c) && overlay(c) && dnd(c)
 
     fun overlaySettings(c: Context): Intent =
         Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION, Uri.parse("package:${c.packageName}"))

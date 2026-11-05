@@ -1,6 +1,8 @@
 package com.alarmapp.ui.theme
 
+import androidx.compose.material3.LocalContentColor
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.material3.Typography
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.runtime.Composable
@@ -109,5 +111,8 @@ private val typography = Typography(
 /** Modo oscuro siempre (RNF4). */
 @Composable
 fun AlarmappTheme(content: @Composable () -> Unit) {
-    MaterialTheme(colorScheme = scheme, typography = typography, content = content)
+    MaterialTheme(colorScheme = scheme, typography = typography) {
+        // Sin esto, los textos sin color explícito salen negros (no hay Surface de fondo).
+        CompositionLocalProvider(LocalContentColor provides Palette.TextPrimary, content = content)
+    }
 }

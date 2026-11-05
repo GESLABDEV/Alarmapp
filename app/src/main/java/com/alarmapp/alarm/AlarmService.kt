@@ -35,7 +35,7 @@ import kotlinx.coroutines.launch
 
 /** Estado de la alarma que observa la pantalla de despertar. */
 object AlarmController {
-    enum class Phase { IDLE, LIGHT, SOUND, ESCALATED }
+    enum class Phase { IDLE, LIGHT, SOUND, ESCALATED, CHECK }
 
     data class State(
         val phase: Phase = Phase.IDLE,
@@ -43,6 +43,8 @@ object AlarmController {
         val light: Float = 0f,
         val snoozesLeft: Int = AlarmScheduler.MAX_SNOOZES,
         val sessionId: Long = -1,
+        /** La pantalla destella si la persona no responde. */
+        val flashing: Boolean = false,
         /** Se llena al apagar la alarma para abrir el reporte matutino. */
         val dismissedSessionId: Long? = null,
     )
@@ -58,8 +60,8 @@ object AlarmController {
  * Despertar progresivo (RF5) y despertar garantizado (HU7):
  *  1. Luz: la pantalla sube como un amanecer unos minutos antes.
  *  2. Sonido: el volumen aumenta gradualmente durante un minuto.
- *  3. Vibración: se suma si no hay respuesta.
- *  4. Escalada: volumen al máximo del canal de alarma y vibración continua.
+ *  3. Vibración continua desde que empieza el sonido; destellos si no hay respuesta.
+ *  4. Escalada: volumen al máximo del canal de alarma y vibración fuerte.
  * Usa el canal de alarma, por lo que suena aunque el celular esté en silencio.
  */
 class AlarmService : Service() {
@@ -73,6 +75,9 @@ class AlarmService : Service() {
     private var sessionId: Long = -1
     private var kind: AlarmStore.Kind = AlarmStore.Kind.DEADLINE
     private var soundStartedAt: Long? = null
+    private var vibrationJob: Job? = null
+    private var savedFilter: Int? = null
+    private var savedRinger: Int? = null
 
     override fun onBind(intent: Intent?): IBinder? = null
 
@@ -81,6 +86,8 @@ class AlarmService : Service() {
             ACTION_START -> start(intent)
             ACTION_SNOOZE -> snooze()
             ACTION_DISMISS -> dismiss()
+            ACTION_CHECK -> check(intent.getLongExtra(EXTRA_SESSION, -1))
+            ACTION_CHECK_OK -> if (AlarmController.state.value.phase == AlarmController.Phase.CHECK) finish(openReport = false)
             else -> if (sequence == null) stopSelf()
         }
         return START_NOT_STICKY
@@ -93,8 +100,10 @@ class AlarmService : Service() {
         LockScreen.wakeScreen(this)
         LockScreen.launch(this, AlarmActivity::class.java)
 
+        getSystemService(android.app.NotificationManager::class.java).cancel(Notifications.ID_WAKE_CHECK)
         stopOutputs()
         sequence?.cancel()
+        overrideSilence()
         sessionId = intent.getLongExtra(EXTRA_SESSION, -1)
         kind = runCatching { AlarmStore.Kind.valueOf(intent.getStringExtra(EXTRA_KIND)!!) }.getOrDefault(AlarmStore.Kind.DEADLINE)
         val soundAt = intent.getLongExtra(EXTRA_SOUND_AT, System.currentTimeMillis())
@@ -122,7 +131,9 @@ class AlarmService : Service() {
         soundStartedAt = System.currentTimeMillis()
         AlarmController.update { it.copy(phase = AlarmController.Phase.SOUND, light = 1f) }
         prepareAlarmVolume()
-        startPlayer()
+        startPlayer(START_VOLUME)
+        // 3. Vibración continua desde que empieza a sonar
+        startVibration(strong = false)
         val escalateNow = kind == AlarmStore.Kind.GUARANTEED
         if (escalateNow) {
             escalate()
@@ -133,8 +144,8 @@ class AlarmService : Service() {
                 player?.setVolume(v, v)
                 delay(1_000)
             }
-            // 3. Vibración si no hay respuesta
-            vibrate(continuous = false)
+            // Sin respuesta tras subir el volumen: la pantalla empieza a destellar.
+            AlarmController.update { it.copy(flashing = true) }
             delay(ESCALATE_AFTER_MS - RAMP_MS)
             // 4. Despertar garantizado
             escalate()
@@ -149,8 +160,34 @@ class AlarmService : Service() {
         val am = getSystemService(AudioManager::class.java)
         am.setStreamVolume(AudioManager.STREAM_ALARM, am.getStreamMaxVolume(AudioManager.STREAM_ALARM), 0)
         player?.setVolume(1f, 1f)
-        vibrate(continuous = true)
-        AlarmController.update { it.copy(phase = AlarmController.Phase.ESCALATED) }
+        startVibration(strong = true)
+        AlarmController.update { it.copy(phase = AlarmController.Phase.ESCALATED, flashing = true) }
+    }
+
+    /**
+     * HU7: "¿Sigues despierto?" con sonido y vibración (también en silencio o No molestar).
+     * Si nadie responde, la alarma de verificación vuelve a disparar la alarma completa.
+     */
+    private fun check(id: Long) {
+        val type = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PLAYBACK else 0
+        ServiceCompat.startForeground(this, Notifications.ID_WAKE_CHECK, Notifications.wakeCheck(this), type)
+        LockScreen.wakeScreen(this)
+        LockScreen.launch(this, WakeCheckActivity::class.java)
+        stopOutputs()
+        sequence?.cancel()
+        overrideSilence()
+        sessionId = id
+        wakeLock = getSystemService(PowerManager::class.java)
+            .newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "alarmapp:check")
+            .apply { acquire(AlarmScheduler.WAKE_CHECK_TIMEOUT_MS + 30_000L) }
+        AlarmController.update { AlarmController.State(phase = AlarmController.Phase.CHECK, sessionId = id) }
+        prepareAlarmVolume()
+        startPlayer(CHECK_VOLUME)
+        startVibration(strong = false)
+        sequence = scope.launch {
+            delay(AlarmScheduler.WAKE_CHECK_TIMEOUT_MS + 30_000L)
+            finish(openReport = false) // respaldo: la alarma completa ya debió dispararse
+        }
     }
 
     private fun snooze() {
@@ -184,6 +221,7 @@ class AlarmService : Service() {
         sequence?.cancel()
         sequence = null
         stopOutputs()
+        restoreSilence()
         AlarmController.update {
             AlarmController.State(dismissedSessionId = if (openReport) sessionId else null)
         }
@@ -203,7 +241,7 @@ class AlarmService : Service() {
         if (current < minimum) am.setStreamVolume(AudioManager.STREAM_ALARM, minimum, 0)
     }
 
-    private fun startPlayer() {
+    private fun startPlayer(volume: Float) {
         val candidates = listOfNotNull(
             AlarmStore.soundUri(this)?.let(Uri::parse),
             RingtoneManager.getDefaultUri(RingtoneManager.TYPE_ALARM),
@@ -221,18 +259,22 @@ class AlarmService : Service() {
                     )
                     setDataSource(this@AlarmService, uri)
                     isLooping = true
-                    setVolume(START_VOLUME, START_VOLUME)
+                    setVolume(volume, volume)
                     prepare()
                     start()
                 }
             }.getOrNull()
             if (mp != null) { player = mp; return }
         }
-        // Sin ningún sonido disponible, la vibración continua sigue siendo el respaldo.
-        vibrate(continuous = true)
+        // Sin ningún sonido disponible, la vibración fuerte sigue siendo el respaldo.
+        startVibration(strong = true)
     }
 
-    private fun vibrate(continuous: Boolean) {
+    /**
+     * Vibración continua: se repite en un ciclo propio en lugar de confiar en el patrón
+     * repetido del sistema, que algunos fabricantes (p. ej. Xiaomi) cortan tras unos pulsos.
+     */
+    private fun startVibration(strong: Boolean) {
         val v = vibrator ?: if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
             getSystemService(VibratorManager::class.java).defaultVibrator
         } else {
@@ -240,20 +282,58 @@ class AlarmService : Service() {
         }
         vibrator = v
         if (!v.hasVibrator()) return
-        val pattern = if (continuous) longArrayOf(0, 1_000, 100) else longArrayOf(0, 600, 900)
-        val effect = VibrationEffect.createWaveform(pattern, 0)
-        v.cancel()
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-            v.vibrate(effect, VibrationAttributes.createForUsage(VibrationAttributes.USAGE_ALARM))
-        } else {
-            @Suppress("DEPRECATION")
-            v.vibrate(effect, AudioAttributes.Builder().setUsage(AudioAttributes.USAGE_ALARM).build())
+        vibrationJob?.cancel()
+        val on = if (strong) 1_200L else 800L
+        val off = if (strong) 150L else 400L
+        val amplitude = if (strong) 255 else VibrationEffect.DEFAULT_AMPLITUDE
+        vibrationJob = scope.launch {
+            while (true) {
+                val effect = VibrationEffect.createOneShot(on, amplitude)
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                    v.vibrate(effect, VibrationAttributes.createForUsage(VibrationAttributes.USAGE_ALARM))
+                } else {
+                    @Suppress("DEPRECATION")
+                    v.vibrate(effect, AudioAttributes.Builder().setUsage(AudioAttributes.USAGE_ALARM).build())
+                }
+                delay(on + off)
+            }
         }
+    }
+
+    /**
+     * Silencio y No molestar: si el usuario dio acceso a "No molestar", se desactiva
+     * mientras suena y se restaura exactamente como estaba al terminar.
+     */
+    private fun overrideSilence() {
+        val nm = getSystemService(android.app.NotificationManager::class.java)
+        if (!nm.isNotificationPolicyAccessGranted) return
+        runCatching {
+            val filter = nm.currentInterruptionFilter
+            if (filter != android.app.NotificationManager.INTERRUPTION_FILTER_ALL) {
+                if (savedFilter == null) savedFilter = filter
+                nm.setInterruptionFilter(android.app.NotificationManager.INTERRUPTION_FILTER_ALL)
+            }
+            val am = getSystemService(AudioManager::class.java)
+            if (am.ringerMode != AudioManager.RINGER_MODE_NORMAL) {
+                if (savedRinger == null) savedRinger = am.ringerMode
+                am.ringerMode = AudioManager.RINGER_MODE_NORMAL
+            }
+        }
+    }
+
+    private fun restoreSilence() {
+        val nm = getSystemService(android.app.NotificationManager::class.java)
+        runCatching { savedRinger?.let { getSystemService(AudioManager::class.java).ringerMode = it } }
+        runCatching { savedFilter?.let { nm.setInterruptionFilter(it) } }
+        savedRinger = null
+        savedFilter = null
     }
 
     private fun stopOutputs() {
         player?.runCatching { stop(); release() }
         player = null
+        vibrationJob?.cancel()
+        vibrationJob = null
         vibrator?.cancel()
         originalAlarmVolume?.let { vol ->
             runCatching { getSystemService(AudioManager::class.java).setStreamVolume(AudioManager.STREAM_ALARM, vol, 0) }
@@ -265,6 +345,7 @@ class AlarmService : Service() {
 
     override fun onDestroy() {
         stopOutputs()
+        restoreSilence()
         scope.cancel()
         super.onDestroy()
     }
@@ -273,11 +354,14 @@ class AlarmService : Service() {
         const val ACTION_START = "com.alarmapp.alarm.START"
         const val ACTION_SNOOZE = "com.alarmapp.alarm.SNOOZE"
         const val ACTION_DISMISS = "com.alarmapp.alarm.DISMISS"
+        const val ACTION_CHECK = "com.alarmapp.alarm.CHECK"
+        const val ACTION_CHECK_OK = "com.alarmapp.alarm.CHECK_OK"
         private const val EXTRA_SESSION = "session"
         private const val EXTRA_SOUND_AT = "sound_at"
         private const val EXTRA_KIND = "kind"
 
         private const val START_VOLUME = 0.1f
+        private const val CHECK_VOLUME = 0.6f
         private const val RAMP_MS = 60_000L
         private const val ESCALATE_AFTER_MS = 120_000L
         private const val MAX_RING_MS = 60 * 60_000L
@@ -288,6 +372,11 @@ class AlarmService : Service() {
                 .putExtra(EXTRA_SESSION, sessionId)
                 .putExtra(EXTRA_SOUND_AT, soundAt)
                 .putExtra(EXTRA_KIND, kind.name)
+            ContextCompat.startForegroundService(context, i)
+        }
+
+        fun check(context: Context, sessionId: Long) {
+            val i = Intent(context, AlarmService::class.java).setAction(ACTION_CHECK).putExtra(EXTRA_SESSION, sessionId)
             ContextCompat.startForegroundService(context, i)
         }
 
