@@ -367,21 +367,24 @@ class AlarmService : Service() {
         vibrator = v
         if (!v.hasVibrator()) return
         vibrationJob?.cancel()
-        // Siempre a máxima intensidad: con DEFAULT_AMPLITUDE algunos motores (p. ej. Xiaomi)
-        // vibran muy suave. Al escalar, los pulsos se alargan y casi no hay pausa.
-        val on = if (strong) 2_000L else 1_400L
-        val off = if (strong) 100L else 300L
-        val amplitude = if (v.hasAmplitudeControl()) 255 else VibrationEffect.DEFAULT_AMPLITUDE
+        // Golpes a máxima intensidad en lugar de una vibración pareja: la piel se acostumbra
+        // rápido a un zumbido continuo y deja de notarlo; los golpes con pausas cortas se
+        // sienten mucho más fuertes con el mismo motor. Al escalar, los golpes son más largos y seguidos.
+        val timings = if (strong) longArrayOf(0, 900, 70, 900, 70, 900, 70)
+        else longArrayOf(0, 450, 110, 450, 110, 450, 110, 1100, 250)
+        val max = if (v.hasAmplitudeControl()) 255 else VibrationEffect.DEFAULT_AMPLITUDE
+        val amplitudes = IntArray(timings.size) { i -> if (i % 2 == 1) max else 0 }
+        val cycle = timings.sum()
         vibrationJob = scope.launch {
             while (true) {
-                val effect = VibrationEffect.createOneShot(on, amplitude)
+                val effect = VibrationEffect.createWaveform(timings, amplitudes, -1)
                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
                     v.vibrate(effect, VibrationAttributes.createForUsage(VibrationAttributes.USAGE_ALARM))
                 } else {
                     @Suppress("DEPRECATION")
                     v.vibrate(effect, AudioAttributes.Builder().setUsage(AudioAttributes.USAGE_ALARM).build())
                 }
-                delay(on + off)
+                delay(cycle)
             }
         }
     }
