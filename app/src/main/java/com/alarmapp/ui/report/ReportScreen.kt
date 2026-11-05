@@ -108,13 +108,13 @@ fun ReportScreen(onBack: () -> Unit, vm: ReportViewModel = viewModel()) {
     ) {
         Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(top = 4.dp)) {
             IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Outlined.ArrowBack, "Volver") }
-            Overline("Reporte matutino", Palette.Cyan)
+            Overline("Reporte matutino", Palette.Accent)
         }
 
         if (s == null || s.endTime == null) {
             Box(Modifier.fillMaxWidth().padding(top = 120.dp), contentAlignment = Alignment.Center) {
                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                    CircularProgressIndicator(color = Palette.Cyan)
+                    CircularProgressIndicator(color = Palette.Accent)
                     Spacer(Modifier.height(16.dp))
                     Text("Calculando tu noche…", color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
@@ -124,7 +124,7 @@ fun ReportScreen(onBack: () -> Unit, vm: ReportViewModel = viewModel()) {
 
         Spacer(Modifier.height(8.dp))
         Text("Dormiste", style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.onSurfaceVariant)
-        Text(formatDuration(s.totalSleepMinutes), style = MaterialTheme.typography.displayMedium, color = Palette.Cyan)
+        Text(formatDuration(s.totalSleepMinutes), style = MaterialTheme.typography.displayMedium, color = Palette.Accent)
         Text(
             "${formatTime(s.startTime)} → ${formatTime(s.endTime)}",
             style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -174,9 +174,9 @@ fun ReportScreen(onBack: () -> Unit, vm: ReportViewModel = viewModel()) {
 @Composable
 private fun RatingCard(rating: Int?, onRate: (Int) -> Unit) {
     // Gradiente ámbar → cian: de "cansado" a "con energía".
-    val colors = listOf(Color(0xFFFF8A3D), Color(0xFFFFB547), Color(0xFFD9D27A), Color(0xFF8FD8B8), Palette.Cyan)
+    val colors = listOf(Color(0xFFB3261E), Color(0xFFA04F30), Color(0xFF8A6416), Color(0xFF2F7A5E), Palette.PrimaryText)
     val labels = listOf("Agotado", "Cansado", "Normal", "Bien", "Con energía")
-    Card(accent = Palette.Cyan) {
+    Card(accent = Palette.Accent) {
         Text("¿Cómo te sientes?", style = MaterialTheme.typography.titleMedium)
         Spacer(Modifier.height(4.dp))
         Text(

@@ -68,7 +68,7 @@
             android:showWhenLocked="true"
             android:turnScreenOn="true"
             android:taskAffinity="com.alarmapp.alarm"
-            android:theme="@style/Theme.Alarmapp" />
+            android:theme="@style/Theme.Alarmapp.Night" />
 
         <activity
             android:name=".alarm.WakeCheckActivity"
@@ -78,7 +78,7 @@
             android:showWhenLocked="true"
             android:turnScreenOn="true"
             android:taskAffinity="com.alarmapp.wakecheck"
-            android:theme="@style/Theme.Alarmapp" />
+            android:theme="@style/Theme.Alarmapp.Night" />
 
         <service
             android:name=".monitor.SleepMonitorService"

@@ -71,7 +71,7 @@ fun AlarmListScreen(onBack: () -> Unit, onEdit: (Long?) -> Unit) {
         }
 
         alarms.forEach { alarm ->
-            Card(Modifier.clickable { onEdit(alarm.id) }, accent = if (alarm.active) Palette.Amber else null) {
+            Card(Modifier.clickable { onEdit(alarm.id) }, accent = if (alarm.active) Palette.PrimaryText else null) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Column(Modifier.weight(1f)) {
                         val minute = alarm.minuteOfDay
@@ -94,9 +94,9 @@ fun AlarmListScreen(onBack: () -> Unit, onEdit: (Long?) -> Unit) {
                             }
                         },
                         colors = SwitchDefaults.colors(
-                            checkedTrackColor = Palette.Amber.copy(alpha = 0.45f),
-                            checkedThumbColor = Palette.Amber,
-                            checkedBorderColor = Palette.Amber,
+                            checkedTrackColor = Palette.Primary,
+                            checkedThumbColor = Palette.Surface,
+                            checkedBorderColor = Palette.Primary,
                         ),
                     )
                 }

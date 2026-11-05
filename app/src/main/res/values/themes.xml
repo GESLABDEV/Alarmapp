@@ -1,10 +1,18 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <!-- Tema base oscuro (RNF4). Los colores de la interfaz viven en ui/theme/Color.kt -->
-    <style name="Theme.Alarmapp" parent="android:Theme.Material.NoActionBar">
+    <!-- Tema base claro de día (Lavanda). Los colores de la interfaz viven en ui/theme/Theme.kt -->
+    <style name="Theme.Alarmapp" parent="android:Theme.Material.Light.NoActionBar">
+        <item name="android:windowBackground">@color/day_bg</item>
+        <item name="android:statusBarColor">@android:color/transparent</item>
+        <item name="android:navigationBarColor">@android:color/transparent</item>
+        <item name="android:windowLightStatusBar">true</item>
+    </style>
+
+    <!-- Pantallas de alarma y verificación: oscuras (Arena y cielo, noche) -->
+    <style name="Theme.Alarmapp.Night" parent="android:Theme.Material.NoActionBar">
         <item name="android:windowBackground">@color/night_bg</item>
-        <item name="android:statusBarColor">@color/night_bg</item>
-        <item name="android:navigationBarColor">@color/night_bg</item>
+        <item name="android:statusBarColor">@android:color/transparent</item>
+        <item name="android:navigationBarColor">@android:color/transparent</item>
         <item name="android:windowLightStatusBar">false</item>
     </style>
 </resources>

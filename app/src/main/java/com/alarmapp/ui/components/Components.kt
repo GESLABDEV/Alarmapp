@@ -59,7 +59,7 @@ fun GlowButton(
     text: String,
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
-    color: Color = Palette.Amber,
+    color: Color = Palette.PrimaryText,
     enabled: Boolean = true,
     height: Dp = 56.dp,
     textStyle: TextStyle = MaterialTheme.typography.labelLarge,
@@ -86,13 +86,13 @@ fun GlowTab(label: String, selected: Boolean, modifier: Modifier = Modifier, onC
     Box(
         modifier
             .clip(shape)
-            .background(if (selected) Palette.Amber.copy(alpha = 0.18f) else Color.Transparent)
-            .border(1.dp, if (selected) Palette.Amber else Color.Transparent, shape)
+            .background(if (selected) Palette.PrimaryText.copy(alpha = 0.18f) else Color.Transparent)
+            .border(1.dp, if (selected) Palette.PrimaryText else Color.Transparent, shape)
             .clickable(onClick = onClick)
             .padding(vertical = 12.dp),
         contentAlignment = Alignment.Center,
     ) {
-        Text(label, style = MaterialTheme.typography.labelLarge, color = if (selected) Palette.Amber else MaterialTheme.colorScheme.onSurfaceVariant)
+        Text(label, style = MaterialTheme.typography.labelLarge, color = if (selected) Palette.PrimaryText else MaterialTheme.colorScheme.onSurfaceVariant)
     }
 }
 

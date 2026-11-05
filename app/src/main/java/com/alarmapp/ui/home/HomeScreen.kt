@@ -21,6 +21,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.Add
 import androidx.compose.material.icons.outlined.Alarm
 import androidx.compose.material.icons.outlined.BatteryAlert
 import androidx.compose.material.icons.outlined.Bedtime
@@ -71,6 +72,7 @@ import java.util.Calendar
 @Composable
 fun HomeScreen(
     onOpenAlarms: () -> Unit,
+    onNewAlarm: () -> Unit,
     onOpenSettings: () -> Unit,
     onOpenReport: (Long) -> Unit,
     onNightStarted: (Long) -> Unit,
@@ -103,7 +105,7 @@ fun HomeScreen(
         // Próxima alarma
         Card(Modifier.clickable(onClick = onOpenAlarms)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Icon(Icons.Outlined.Alarm, null, tint = Palette.Amber)
+                Icon(Icons.Outlined.Alarm, null, tint = Palette.PrimaryText)
                 Spacer(Modifier.width(14.dp))
                 Column(Modifier.weight(1f)) {
                     val next = vm.nextAlarm()
@@ -133,12 +135,12 @@ fun HomeScreen(
 
         // Última noche (cian: color de la mañana)
         state.lastNight?.let { s ->
-            Card(Modifier.clickable { onOpenReport(s.id) }, accent = Palette.Cyan) {
+            Card(Modifier.clickable { onOpenReport(s.id) }, accent = Palette.Accent) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    Icon(Icons.Outlined.WbTwilight, null, tint = Palette.Cyan)
+                    Icon(Icons.Outlined.WbTwilight, null, tint = Palette.Accent)
                     Spacer(Modifier.width(14.dp))
                     Column(Modifier.weight(1f)) {
-                        Overline("Última noche", Palette.Cyan)
+                        Overline("Última noche", Palette.Accent)
                         Text(formatDuration(s.totalSleepMinutes), style = MaterialTheme.typography.titleLarge)
                         Text(
                             "Latencia ${formatDuration(s.latencyMinutes)} · despertaste en ${stageLabel(s.wakeStage).lowercase()}",
@@ -149,11 +151,33 @@ fun HomeScreen(
                 }
             }
         }
-        Spacer(Modifier.height(24.dp))
+        Spacer(Modifier.height(20.dp))
+        NewAlarmButton(onNewAlarm)
+        Spacer(Modifier.height(20.dp))
     }
 
     if (sheetOpen) {
         BedtimeSheet(vm, state, onDismiss = { sheetOpen = false }, onOpenAlarms = { sheetOpen = false; onOpenAlarms() }, onOpenSettings = { sheetOpen = false; onOpenSettings() }, onStarted = { sheetOpen = false; onNightStarted(it) })
+    }
+}
+
+/** Botón independiente, al final de la pantalla, para crear una alarma. */
+@Composable
+private fun NewAlarmButton(onClick: () -> Unit) {
+    Row(
+        Modifier
+            .fillMaxWidth()
+            .height(54.dp)
+            .clip(RoundedCornerShape(27.dp))
+            .background(Palette.Background)
+            .border(1.5.dp, Palette.Primary, RoundedCornerShape(27.dp))
+            .clickable(onClick = onClick),
+        horizontalArrangement = Arrangement.Center,
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Icon(Icons.Outlined.Add, null, tint = Palette.PrimaryText, modifier = Modifier.size(20.dp))
+        Spacer(Modifier.width(8.dp))
+        Text("Nueva alarma", style = MaterialTheme.typography.titleMedium, color = Palette.PrimaryText)
     }
 }
 
@@ -164,7 +188,7 @@ private fun SleepButton(onClick: () -> Unit) {
             Modifier
                 .size(220.dp)
                 .clip(CircleShape)
-                .background(Brush.radialGradient(listOf(Palette.Amber.copy(alpha = 0.22f), Color.Transparent)))
+                .background(Palette.PrimarySoft)
                 .clickable(onClick = onClick),
             contentAlignment = Alignment.Center,
         ) {
@@ -172,14 +196,13 @@ private fun SleepButton(onClick: () -> Unit) {
                 Modifier
                     .size(168.dp)
                     .clip(CircleShape)
-                    .background(Palette.Amber.copy(alpha = 0.14f))
-                    .border(2.dp, Palette.Amber, CircleShape),
+                    .background(Palette.Primary),
                 contentAlignment = Alignment.Center,
             ) {
                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                    Icon(Icons.Outlined.Bedtime, null, tint = Palette.Amber, modifier = Modifier.size(36.dp))
+                    Icon(Icons.Outlined.Bedtime, null, tint = Palette.Surface, modifier = Modifier.size(36.dp))
                     Spacer(Modifier.height(6.dp))
-                    Text("Me voy a\ndormir", style = MaterialTheme.typography.titleMedium, color = Palette.Amber, textAlign = TextAlign.Center)
+                    Text("Me voy a\ndormir", style = MaterialTheme.typography.titleMedium, color = Palette.Surface, textAlign = TextAlign.Center)
                 }
             }
         }
@@ -245,7 +268,7 @@ private fun BedtimeSheet(
                 }
             } else if (fixedOptions.isEmpty()) {
                 Text("Aún no tienes alarmas activas.", style = MaterialTheme.typography.bodyLarge)
-                TextButton(onClick = onOpenAlarms) { Text("Crear alarma", color = Palette.Amber) }
+                TextButton(onClick = onOpenAlarms) { Text("Crear alarma", color = Palette.PrimaryText) }
             } else {
                 Text("Elige la alarma de esta noche", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 Spacer(Modifier.height(12.dp))
@@ -282,7 +305,7 @@ private fun BedtimeSheet(
             if (!alarmReady) {
                 Spacer(Modifier.height(14.dp))
                 Notice(Icons.Outlined.Alarm, "Faltan permisos para que la alarma suene de forma confiable.", Palette.Danger)
-                TextButton(onClick = onOpenSettings) { Text("Revisar permisos", color = Palette.Amber) }
+                TextButton(onClick = onOpenSettings) { Text("Revisar permisos", color = Palette.PrimaryText) }
             }
 
             Spacer(Modifier.height(24.dp))
@@ -313,13 +336,13 @@ private fun TimeOption(time: String, caption: String, selected: Boolean, modifie
     Column(
         modifier
             .clip(RoundedCornerShape(16.dp))
-            .border(1.5.dp, if (selected) Palette.Amber else Palette.Outline, RoundedCornerShape(16.dp))
-            .background(if (selected) Palette.Amber.copy(alpha = 0.12f) else Color.Transparent)
+            .border(1.5.dp, if (selected) Palette.PrimaryText else Palette.Outline, RoundedCornerShape(16.dp))
+            .background(if (selected) Palette.PrimaryText.copy(alpha = 0.12f) else Color.Transparent)
             .clickable(onClick = onClick)
             .padding(vertical = 14.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
-        Text(time, style = MaterialTheme.typography.titleMedium, color = if (selected) Palette.Amber else MaterialTheme.colorScheme.onSurface)
+        Text(time, style = MaterialTheme.typography.titleMedium, color = if (selected) Palette.PrimaryText else MaterialTheme.colorScheme.onSurface)
         Text(caption, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
     }
 }

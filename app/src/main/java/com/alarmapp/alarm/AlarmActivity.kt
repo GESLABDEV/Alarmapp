@@ -6,6 +6,7 @@ import android.os.Bundle
 import android.view.WindowManager
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
+import androidx.activity.SystemBarStyle
 import androidx.activity.enableEdgeToEdge
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
@@ -58,9 +59,9 @@ class AlarmActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         LockScreen.showOverLock(this)
-        enableEdgeToEdge()
+        enableEdgeToEdge(SystemBarStyle.dark(android.graphics.Color.TRANSPARENT), SystemBarStyle.dark(android.graphics.Color.TRANSPARENT))
         setContent {
-            AlarmappTheme {
+            AlarmappTheme(night = true) {
                 val state by AlarmController.state.collectAsState()
                 LaunchedEffect(state.light, state.flashing) { setBrightness(if (state.flashing) 1f else state.light) }
                 LaunchedEffect(state.dismissedSessionId, state.phase) {
@@ -125,7 +126,7 @@ private fun AlarmScreen(state: AlarmController.State, onSnooze: () -> Unit, onDi
     val content = Palette.Cream
     val panel = if (state.flashing) Modifier
         .clip(RoundedCornerShape(24.dp))
-        .background(Palette.Night.copy(alpha = 0.72f))
+        .background(Palette.NightBg.copy(alpha = 0.72f))
         .padding(16.dp) else Modifier
 
     Column(

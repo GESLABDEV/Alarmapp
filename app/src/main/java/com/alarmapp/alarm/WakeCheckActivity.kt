@@ -4,6 +4,7 @@ import android.app.NotificationManager
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
+import androidx.activity.SystemBarStyle
 import androidx.activity.enableEdgeToEdge
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
@@ -40,20 +41,20 @@ class WakeCheckActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         LockScreen.showOverLock(this)
-        enableEdgeToEdge()
+        enableEdgeToEdge(SystemBarStyle.dark(android.graphics.Color.TRANSPARENT), SystemBarStyle.dark(android.graphics.Color.TRANSPARENT))
         setContent {
-            AlarmappTheme {
+            AlarmappTheme(night = true) {
                 var remaining by remember { mutableLongStateOf(secondsLeft()) }
                 LaunchedEffect(Unit) {
                     while (remaining > 0) { delay(1_000); remaining = secondsLeft() }
                     finish() // la alarma de verificación ya se disparó
                 }
                 Column(
-                    Modifier.fillMaxSize().background(Palette.Night).statusBarsPadding().navigationBarsPadding().padding(24.dp),
+                    Modifier.fillMaxSize().background(Palette.NightBg).statusBarsPadding().navigationBarsPadding().padding(24.dp),
                     horizontalAlignment = Alignment.CenterHorizontally,
                     verticalArrangement = Arrangement.Center,
                 ) {
-                    Text("¿Sigues despierto?", style = MaterialTheme.typography.headlineMedium, color = Palette.Cyan)
+                    Text("¿Sigues despierto?", style = MaterialTheme.typography.headlineMedium, color = Palette.NightSky)
                     Spacer(Modifier.height(12.dp))
                     Text(
                         "Si no respondes en $remaining s, la alarma volverá a sonar.",
@@ -64,7 +65,7 @@ class WakeCheckActivity : ComponentActivity() {
                     GlowButton(
                         text = "Sí, estoy despierto",
                         onClick = ::confirm,
-                        color = Palette.Cyan,
+                        color = Palette.NightSky,
                         height = 64.dp,
                         textStyle = MaterialTheme.typography.titleMedium,
                     )

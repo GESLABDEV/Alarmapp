@@ -87,7 +87,7 @@ fun PermissionList() {
             Text(
                 "En Xiaomi, Redmi o POCO activa también en Ajustes → Apps → Alarmapp → Otros permisos: " +
                     "\"Mostrar en pantalla de bloqueo\" y \"Mostrar ventanas emergentes mientras se ejecuta en segundo plano\".",
-                style = MaterialTheme.typography.bodyMedium, color = Palette.Amber,
+                style = MaterialTheme.typography.bodyMedium, color = Palette.PrimaryText,
                 modifier = Modifier.padding(vertical = 8.dp).clickable { open(Permissions.appSettings(context)) },
             )
         }
@@ -99,13 +99,13 @@ fun PermissionList() {
             ) {
                 Icon(
                     if (ok) Icons.Outlined.CheckCircle else Icons.Outlined.RadioButtonUnchecked, null,
-                    tint = if (ok) Palette.Cyan else Palette.Amber, modifier = Modifier.size(22.dp),
+                    tint = if (ok) Palette.Primary else Palette.Accent, modifier = Modifier.size(22.dp),
                 )
                 Spacer(Modifier.width(14.dp))
                 Column(Modifier.weight(1f)) {
                     Text(item.title, style = MaterialTheme.typography.titleMedium)
                     Text(item.why, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                    if (!ok) Text("Toca para activar", style = MaterialTheme.typography.labelLarge, color = Palette.Amber, modifier = Modifier.padding(top = 4.dp))
+                    if (!ok) Text("Toca para activar", style = MaterialTheme.typography.labelLarge, color = Palette.PrimaryText, modifier = Modifier.padding(top = 4.dp))
                 }
             }
         }

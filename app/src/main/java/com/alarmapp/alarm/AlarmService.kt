@@ -367,9 +367,11 @@ class AlarmService : Service() {
         vibrator = v
         if (!v.hasVibrator()) return
         vibrationJob?.cancel()
-        val on = if (strong) 1_200L else 800L
-        val off = if (strong) 150L else 400L
-        val amplitude = if (strong) 255 else VibrationEffect.DEFAULT_AMPLITUDE
+        // Siempre a máxima intensidad: con DEFAULT_AMPLITUDE algunos motores (p. ej. Xiaomi)
+        // vibran muy suave. Al escalar, los pulsos se alargan y casi no hay pausa.
+        val on = if (strong) 2_000L else 1_400L
+        val off = if (strong) 100L else 300L
+        val amplitude = if (v.hasAmplitudeControl()) 255 else VibrationEffect.DEFAULT_AMPLITUDE
         vibrationJob = scope.launch {
             while (true) {
                 val effect = VibrationEffect.createOneShot(on, amplitude)

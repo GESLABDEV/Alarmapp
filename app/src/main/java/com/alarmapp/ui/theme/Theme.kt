@@ -5,6 +5,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.material3.Typography
 import androidx.compose.material3.darkColorScheme
+import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.TextStyle
@@ -14,49 +15,62 @@ import androidx.compose.ui.unit.sp
 import com.alarmapp.core.sleep.SleepStage
 
 /**
- * Paleta con fundamento (ver README, "Colores"):
+ * Paleta (ver README, "Colores"):
  *
- * - Fondo casi negro azulado: el modo oscuro emite poca luz de noche y ahorra batería en OLED.
- * - Ámbar (≈590 nm): las longitudes de onda largas estimulan poco a la melanopsina, el
- *   fotorreceptor que más suprime la melatonina (pico ≈480 nm). Por eso todo lo que se usa
- *   antes de dormir es ámbar.
- * - Cian (≈480 nm): justo en la zona de mayor sensibilidad de la melanopsina; se reserva
- *   para la mañana (reporte), cuando conviene favorecer el estado de alerta.
- * - Amanecer: la pantalla de alarma pasa de rojo profundo a blanco cálido, imitando la
- *   simulación de amanecer estudiada en laboratorio.
- * - Fases: cuatro tonos bien separados en el círculo cromático para distinguirlas de un
- *   vistazo; todos superan 4.5:1 de contraste sobre el fondo (WCAG AA).
+ * - DÍA · Lavanda: fondo lila muy claro, botones lavanda y durazno como acento. Suave y
+ *   minimalista para usar la app con luz.
+ * - NOCHE · Arena y cielo: al presionar "Me voy a dormir" la app pasa a un azul noche profundo
+ *   (no negro) con texto en tonos cálidos: poca luz emitida y sin blancos que encandilen.
+ * - ALARMA · Amanecer: rojo profundo → brasa, imitando la simulación de amanecer.
+ * - Todo texto cumple contraste ≥ 4.5:1 (WCAG AA) sobre su fondo.
  */
 object Palette {
-    val Night = Color(0xFF0B0E1A)
-    val Surface = Color(0xFF151A2B)
-    val SurfaceHigh = Color(0xFF1E2438)
-    val Outline = Color(0xFF2A3150)
-    val TextPrimary = Color(0xFFEDEFF7)
-    val TextSecondary = Color(0xFF9AA3BF)
+    // ---------------------------------------------------------------- Día · Lavanda
+    val Background = Color(0xFFF6F3FB)
+    val Surface = Color(0xFFFFFFFF)
+    val SurfaceHigh = Color(0xFFECE7F8)
+    val Outline = Color(0xFFDDD6EE)
+    val TextPrimary = Color(0xFF2D2840)
+    val TextSecondary = Color(0xFF625C78)
+    /** Relleno del botón principal (texto blanco encima, 5.2:1). */
+    val Primary = Color(0xFF6E5BB8)
+    /** Lavanda oscuro: texto, íconos y bordes de botones secundarios. */
+    val PrimaryText = Color(0xFF4E3F95)
+    val PrimarySoft = Color(0xFFE8E2F7)
+    /** Durazno: la mañana (última noche, reporte). */
+    val Accent = Color(0xFFA04F30)
+    val AccentSoft = Color(0xFFFBE3D8)
+    val Danger = Color(0xFFB3261E)
 
-    val Amber = Color(0xFFFFB547)
-    val AmberDeep = Color(0xFFFF8A3D)
-    val Cyan = Color(0xFF3DD6F5)
-    val Danger = Color(0xFFFF6B6B)
+    // ---------------------------------------------------------------- Noche · Arena y cielo
+    val NightBg = Color(0xFF1A1F27)
+    val NightSurface = Color(0xFF242A33)
+    val NightOutline = Color(0xFF343C48)
+    val NightText = Color(0xFFE7C98F)
+    val NightTextSecondary = Color(0xFFB8AE98)
+    val NightTextTertiary = Color(0xFF8C97A6)
+    val NightSky = Color(0xFF8FB8DE)
+
+    // ---------------------------------------------------------------- Alarma · Amanecer
     /** Naranja brasa: fondo de selección donde el texto es crema (contraste 5.3:1). */
     val Ember = Color(0xFFC2410C)
-    /** Crema luminoso: texto sobre superficies de color, en lugar de negro. */
+    /** Crema luminoso: texto sobre el amanecer, en lugar de negro. */
     val Cream = Color(0xFFFFF3D6)
 
-    val Deep = Color(0xFF8B7CF6)
-    val Light = Color(0xFF48C6EF)
-    val Rem = Color(0xFFD08BFA)
-    val Awake = Amber
-
     /**
-     * De noche a amanecer: rojo profundo → brasa. Se detiene en un naranja oscuro para que
-     * el texto crema siempre se lea; la intensidad la aporta el brillo de la pantalla.
+     * De noche a amanecer: azul noche → rojo profundo → brasa. Se detiene en un naranja
+     * oscuro para que el texto crema siempre se lea; la intensidad la aporta el brillo.
      */
     val Sunrise = listOf(
-        Color(0xFF0B0E1A), Color(0xFF2A0B12), Color(0xFF5C1A14),
+        Color(0xFF1A1F27), Color(0xFF2A0B12), Color(0xFF5C1A14),
         Color(0xFF8A2A17), Color(0xFFB23A12), Color(0xFFC2410C),
     )
+
+    // ---------------------------------------------------------------- Fases (sobre fondo claro)
+    val Deep = Color(0xFF4E3F95)
+    val Light = Color(0xFF3D7FB8)
+    val Rem = Color(0xFFA8457F)
+    val Awake = Color(0xFFB8652A)
 
     fun stage(s: SleepStage): Color = when (s) {
         SleepStage.DEEP -> Deep
@@ -74,24 +88,46 @@ fun stageLabel(s: SleepStage?): String = when (s) {
     null -> "—"
 }
 
-private val scheme = darkColorScheme(
-    primary = Palette.Amber,
-    onPrimary = Palette.Cream,
-    secondary = Palette.Cyan,
-    onSecondary = Palette.Cream,
+private val dayScheme = lightColorScheme(
+    primary = Palette.Primary,
+    onPrimary = Palette.Surface,
+    primaryContainer = Palette.PrimarySoft,
+    onPrimaryContainer = Palette.PrimaryText,
+    secondary = Palette.Accent,
+    onSecondary = Palette.Surface,
     tertiary = Palette.Rem,
-    background = Palette.Night,
+    background = Palette.Background,
     onBackground = Palette.TextPrimary,
     surface = Palette.Surface,
     onSurface = Palette.TextPrimary,
     surfaceVariant = Palette.SurfaceHigh,
     onSurfaceVariant = Palette.TextSecondary,
-    onError = Palette.Cream,
+    surfaceContainerLow = Palette.Surface,
     surfaceContainer = Palette.Surface,
-    surfaceContainerHigh = Palette.SurfaceHigh,
+    surfaceContainerHigh = Palette.Surface,
     surfaceContainerHighest = Palette.SurfaceHigh,
     outline = Palette.Outline,
     outlineVariant = Palette.Outline,
+    error = Palette.Danger,
+    onError = Palette.Surface,
+)
+
+private val nightScheme = darkColorScheme(
+    primary = Palette.NightText,
+    onPrimary = Palette.NightBg,
+    secondary = Palette.NightSky,
+    onSecondary = Palette.NightBg,
+    background = Palette.NightBg,
+    onBackground = Palette.NightText,
+    surface = Palette.NightSurface,
+    onSurface = Palette.NightText,
+    surfaceVariant = Palette.NightSurface,
+    onSurfaceVariant = Palette.NightTextSecondary,
+    surfaceContainer = Palette.NightSurface,
+    surfaceContainerHigh = Palette.NightSurface,
+    surfaceContainerHighest = Palette.NightSurface,
+    outline = Palette.NightOutline,
+    outlineVariant = Palette.NightOutline,
     error = Palette.Danger,
 )
 
@@ -108,11 +144,17 @@ private val typography = Typography(
     labelMedium = base.labelMedium.copy(letterSpacing = 1.2.sp),
 )
 
-/** Modo oscuro siempre (RNF4). */
+/**
+ * Claro de día; [night] = true para la noche y la alarma (oscuro cálido, RNF4 actualizado:
+ * "claro de día, oscuro cálido durante la noche").
+ */
 @Composable
-fun AlarmappTheme(content: @Composable () -> Unit) {
-    MaterialTheme(colorScheme = scheme, typography = typography) {
-        // Sin esto, los textos sin color explícito salen negros (no hay Surface de fondo).
-        CompositionLocalProvider(LocalContentColor provides Palette.TextPrimary, content = content)
+fun AlarmappTheme(night: Boolean = false, content: @Composable () -> Unit) {
+    MaterialTheme(colorScheme = if (night) nightScheme else dayScheme, typography = typography) {
+        // Sin esto, los textos sin color explícito tomarían el color por defecto.
+        CompositionLocalProvider(
+            LocalContentColor provides if (night) Palette.NightText else Palette.TextPrimary,
+            content = content,
+        )
     }
 }

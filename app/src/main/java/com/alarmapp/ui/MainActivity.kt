@@ -5,6 +5,7 @@ import android.content.Intent
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
+import androidx.activity.SystemBarStyle
 import androidx.activity.enableEdgeToEdge
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -31,7 +32,11 @@ class MainActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        enableEdgeToEdge()
+        // Barras del sistema con íconos oscuros sobre el fondo claro de día.
+        enableEdgeToEdge(
+            SystemBarStyle.light(android.graphics.Color.TRANSPARENT, android.graphics.Color.TRANSPARENT),
+            SystemBarStyle.light(android.graphics.Color.TRANSPARENT, android.graphics.Color.TRANSPARENT),
+        )
         pendingReport = reportFrom(intent)
 
         val prefs = getSharedPreferences("ui", Context.MODE_PRIVATE)
@@ -63,6 +68,7 @@ class MainActivity : ComponentActivity() {
                     composable("home") {
                         HomeScreen(
                             onOpenAlarms = { nav.navigate("alarms") },
+                            onNewAlarm = { nav.navigate("alarm/-1") },
                             onOpenSettings = { nav.navigate("settings") },
                             onOpenReport = { nav.navigate("report/$it") },
                             onNightStarted = { nav.navigate("night/$it") { popUpTo("home") } },
@@ -81,9 +87,11 @@ class MainActivity : ComponentActivity() {
                     composable("settings") { SettingsScreen(onBack = { nav.popBackStack() }) }
                     composable("night/{sessionId}", arguments = listOf(navArgument("sessionId") { type = NavType.LongType })) { entry ->
                         val id = entry.arguments?.getLong("sessionId") ?: -1L
-                        NightScreen(id, onFinished = {
-                            nav.navigate("report/$it") { popUpTo("home") }
-                        })
+                        AlarmappTheme(night = true) {
+                            NightScreen(id, onFinished = {
+                                nav.navigate("report/$it") { popUpTo("home") }
+                            })
+                        }
                     }
                     composable("report/{sessionId}", arguments = listOf(navArgument("sessionId") { type = NavType.LongType })) {
                         ReportScreen(onBack = {

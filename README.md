@@ -53,16 +53,14 @@ Para integrar un wearable más adelante basta con otra clase que implemente `Sle
 
 ## Colores (y por qué)
 
-| Color | Uso | Fundamento |
+| Momento | Paleta | Uso |
 |---|---|---|
-| Fondo `#0B0E1A` | Toda la app | Modo oscuro: poca luz emitida de noche; ahorra batería en pantallas OLED. |
-| Ámbar `#FFB547` | Todo lo nocturno: botón principal, pantalla de la noche | Las longitudes de onda largas (≈590 nm) estimulan poco a la melanopsina, el fotorreceptor que más suprime la melatonina. |
-| Cian `#3DD6F5` | La mañana: reporte, "¿Sigues despierto?" | Cerca del pico de sensibilidad de la melanopsina (≈480 nm), asociado al estado de alerta. |
-| Amanecer (rojo → naranja → ámbar → blanco cálido) | Pantalla de alarma | Imita la simulación de amanecer: el documento cita mejor estado de alerta con luz gradual en los últimos 30 min. |
-| Índigo, celeste, violeta, ámbar | Profundo, ligero, REM, despierto | Tonos separados en el círculo cromático; todos con contraste ≥ 5.8:1 sobre el fondo (WCAG AA pide 4.5:1). |
+| Día | **Lavanda**: fondo `#F6F3FB`, lavanda `#6E5BB8` / `#4E3F95`, durazno `#A04F30` | Inicio, alarmas, ajustes y reporte. Suave, pastel y minimalista. |
+| Noche | **Arena y cielo**: azul noche `#1A1F27`, arena cálida `#E7C98F`, cielo `#8FB8DE` | Pantalla de la noche y "¿Sigues despierto?". Oscuro pero no negro, con texto cálido y brillo al mínimo para no encandilar. |
+| Alarma | **Amanecer**: rojo profundo → brasa `#C2410C`, texto crema | Simula un amanecer; destellos si no hay respuesta. |
 
-Matiz honesto: a brillo bajo, el efecto del color de una pantalla sobre la melatonina es pequeño;
-el beneficio principal viene de bajar el brillo y de la coherencia visual noche/mañana.
+RNF4 pasa de "modo oscuro por defecto" a "claro de día, oscuro cálido durante la noche".
+Todos los textos cumplen contraste ≥ 4.5:1 (WCAG AA) sobre su fondo.
 
 ## Decisiones añadidas durante el desarrollo
 

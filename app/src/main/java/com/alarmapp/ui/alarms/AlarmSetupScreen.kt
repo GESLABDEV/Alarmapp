@@ -128,16 +128,16 @@ private fun AlarmEditor(alarm: AlarmEntity?, onBack: () -> Unit) {
             TimePicker(
                 state = picker,
                 colors = TimePickerDefaults.colors(
-                    clockDialColor = Palette.Surface,
-                    clockDialSelectedContentColor = Palette.Cream,
+                    clockDialColor = Palette.SurfaceHigh,
+                    clockDialSelectedContentColor = Palette.Surface,
                     clockDialUnselectedContentColor = Palette.TextPrimary,
-                    selectorColor = Palette.Ember,
-                    timeSelectorSelectedContainerColor = Palette.Amber.copy(alpha = 0.18f),
-                    timeSelectorSelectedContentColor = Palette.Amber,
+                    selectorColor = Palette.Primary,
+                    timeSelectorSelectedContainerColor = Palette.PrimaryText.copy(alpha = 0.18f),
+                    timeSelectorSelectedContentColor = Palette.PrimaryText,
                     timeSelectorUnselectedContainerColor = Palette.SurfaceHigh,
                     timeSelectorUnselectedContentColor = Palette.TextPrimary,
-                    periodSelectorSelectedContainerColor = Palette.Amber.copy(alpha = 0.18f),
-                    periodSelectorSelectedContentColor = Palette.Amber,
+                    periodSelectorSelectedContainerColor = Palette.PrimaryText.copy(alpha = 0.18f),
+                    periodSelectorSelectedContentColor = Palette.PrimaryText,
                     periodSelectorUnselectedContentColor = Palette.TextSecondary,
                     periodSelectorBorderColor = Palette.Outline,
                 ),
@@ -155,15 +155,15 @@ private fun AlarmEditor(alarm: AlarmEntity?, onBack: () -> Unit) {
                         .weight(1f)
                         .aspectRatio(1f)
                         .clip(CircleShape)
-                        .background(if (on) Palette.Amber.copy(alpha = 0.18f) else Color.Transparent)
-                        .border(1.5.dp, if (on) Palette.Amber else Palette.Outline, CircleShape)
+                        .background(if (on) Palette.PrimaryText.copy(alpha = 0.18f) else Color.Transparent)
+                        .border(1.5.dp, if (on) Palette.PrimaryText else Palette.Outline, CircleShape)
                         .clickable {
                             val next = AlarmTimes.toggle(days, i)
                             if (next != 0) days = next // al menos un día
                         },
                     contentAlignment = Alignment.Center,
                 ) {
-                    Text(letter, style = MaterialTheme.typography.labelLarge, color = if (on) Palette.Amber else Palette.TextSecondary)
+                    Text(letter, style = MaterialTheme.typography.labelLarge, color = if (on) Palette.PrimaryText else Palette.TextSecondary)
                 }
             }
         }
@@ -180,7 +180,7 @@ private fun AlarmEditor(alarm: AlarmEntity?, onBack: () -> Unit) {
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
                     beds.forEachIndexed { i, t ->
                         Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                            Text(formatTime(t), style = MaterialTheme.typography.titleLarge, color = if (i == 0) Palette.Amber else MaterialTheme.colorScheme.onSurface)
+                            Text(formatTime(t), style = MaterialTheme.typography.titleLarge, color = if (i == 0) Palette.PrimaryText else MaterialTheme.colorScheme.onSurface)
                             Text("${6 - i} ciclos", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                         }
                     }
@@ -228,7 +228,7 @@ private fun AlarmEditor(alarm: AlarmEntity?, onBack: () -> Unit) {
                     }
                 }) { Text("Eliminar", color = Palette.Danger) }
             },
-            dismissButton = { TextButton(onClick = { confirmDelete = false }) { Text("Cancelar", color = Palette.Amber) } },
+            dismissButton = { TextButton(onClick = { confirmDelete = false }) { Text("Cancelar", color = Palette.PrimaryText) } },
             containerColor = MaterialTheme.colorScheme.surface,
         )
     }

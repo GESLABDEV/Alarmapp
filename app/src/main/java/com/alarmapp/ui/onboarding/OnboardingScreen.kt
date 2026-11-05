@@ -36,7 +36,7 @@ fun OnboardingScreen(onDone: () -> Unit) {
             .padding(20.dp),
     ) {
         Spacer(Modifier.height(24.dp))
-        Overline("Bienvenido", Palette.Amber)
+        Overline("Bienvenido", Palette.PrimaryText)
         Text("Despierta en tu mejor momento", style = MaterialTheme.typography.headlineMedium)
         Spacer(Modifier.height(10.dp))
         Text(

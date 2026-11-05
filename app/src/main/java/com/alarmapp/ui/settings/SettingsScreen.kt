@@ -1,6 +1,7 @@
 package com.alarmapp.ui.settings
 
 import android.app.Activity
+import android.widget.Toast
 import android.content.Intent
 import android.media.RingtoneManager
 import android.net.Uri
@@ -165,7 +166,7 @@ fun SettingsScreen(onBack: () -> Unit) {
                     text = if (preview != null) "Detener" else "Escuchar",
                     modifier = Modifier.weight(1f),
                     height = 48.dp,
-                    color = Palette.Cyan,
+                    color = Palette.Accent,
                     onClick = {
                         val current = preview
                         if (current != null) {
@@ -174,6 +175,16 @@ fun SettingsScreen(onBack: () -> Unit) {
                             val uri = AlarmStore.soundUri(context)?.let(Uri::parse)
                                 ?: RingtoneManager.getDefaultUri(RingtoneManager.TYPE_ALARM)
                             preview = RingtoneManager.getRingtone(context, uri)?.also { r ->
+                                // Por el canal de alarma, igual que la alarma real: así se oye
+                                // aunque el timbre esté en silencio o con volumen bajo.
+                                r.audioAttributes = android.media.AudioAttributes.Builder()
+                                    .setUsage(android.media.AudioAttributes.USAGE_ALARM)
+                                    .setContentType(android.media.AudioAttributes.CONTENT_TYPE_SONIFICATION)
+                                    .build()
+                                val am = context.getSystemService(android.media.AudioManager::class.java)
+                                if (am.getStreamVolume(android.media.AudioManager.STREAM_ALARM) == 0) {
+                                    Toast.makeText(context, "El volumen de alarma está en cero", Toast.LENGTH_SHORT).show()
+                                }
                                 r.play()
                                 scope.launch { kotlinx.coroutines.delay(6_000); r.stop(); if (preview === r) preview = null }
                             }
@@ -212,7 +223,7 @@ fun SettingsScreen(onBack: () -> Unit) {
                             if (v) com.alarmapp.sync.SummaryUploadWorker.enqueue(context)
                         }
                     },
-                    colors = SwitchDefaults.colors(checkedTrackColor = Palette.Cyan.copy(alpha = 0.45f), checkedThumbColor = Palette.Cyan, checkedBorderColor = Palette.Cyan),
+                    colors = SwitchDefaults.colors(checkedTrackColor = Palette.Primary, checkedThumbColor = Palette.Surface, checkedBorderColor = Palette.Primary),
                 )
             }
             Spacer(Modifier.height(12.dp))

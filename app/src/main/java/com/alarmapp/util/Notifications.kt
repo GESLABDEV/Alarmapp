@@ -24,7 +24,7 @@ object Notifications {
     const val ID_UPCOMING = 40
     const val CHANNEL_UPCOMING = "upcoming"
 
-    private const val AMBER = 0xFFFFB547.toInt()
+    private const val AMBER = 0xFF6E5BB8.toInt() // lavanda de la marca
 
     fun createChannels(context: Context) {
         val nm = context.getSystemService(NotificationManager::class.java)

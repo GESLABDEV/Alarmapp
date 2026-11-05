@@ -69,35 +69,40 @@ fun NightScreen(sessionId: Long, onFinished: (Long) -> Unit) {
             attrs.screenBrightness = 0.01f
             window.attributes = attrs
         }
+        val bars = window?.let { androidx.core.view.WindowCompat.getInsetsController(it, it.decorView) }
+        bars?.isAppearanceLightStatusBars = false
+        bars?.isAppearanceLightNavigationBars = false
         onDispose {
             if (window != null && attrs != null) {
                 attrs.screenBrightness = previous ?: -1f
                 window.attributes = attrs
             }
+            bars?.isAppearanceLightStatusBars = true
+            bars?.isAppearanceLightNavigationBars = true
         }
     }
 
     Column(
-        Modifier.fillMaxSize().background(Palette.Night).statusBarsPadding().navigationBarsPadding().padding(24.dp),
+        Modifier.fillMaxSize().background(Palette.NightBg).statusBarsPadding().navigationBarsPadding().padding(24.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.SpaceBetween,
     ) {
         Spacer(Modifier.height(24.dp))
         Column(horizontalAlignment = Alignment.CenterHorizontally) {
-            Text(formatTime(now), style = MaterialTheme.typography.displayLarge, color = Palette.AmberDeep.copy(alpha = 0.75f))
+            Text(formatTime(now), style = MaterialTheme.typography.displayLarge, color = Palette.NightText)
             Spacer(Modifier.height(12.dp))
             session?.let { s ->
                 val from = SmartWake.windowStart(s.deadlineTime, s.windowMinutes)
                 Text(
                     "Despertar entre ${formatTime(from)} y ${formatTime(s.deadlineTime)}",
-                    style = MaterialTheme.typography.bodyLarge, color = Palette.AmberDeep.copy(alpha = 0.5f),
+                    style = MaterialTheme.typography.bodyLarge, color = Palette.NightTextSecondary,
                 )
             }
             Spacer(Modifier.height(8.dp))
             Text(
                 if (running == sessionId) "Midiendo tu noche · deja el celular sobre el colchón"
                 else "La medición se detuvo, pero la alarma sigue programada",
-                style = MaterialTheme.typography.bodyMedium, color = Palette.AmberDeep.copy(alpha = 0.4f),
+                style = MaterialTheme.typography.bodyMedium, color = Palette.NightTextTertiary,
                 textAlign = TextAlign.Center,
             )
         }
@@ -105,7 +110,7 @@ fun NightScreen(sessionId: Long, onFinished: (Long) -> Unit) {
         Box(
             Modifier
                 .fillMaxWidth()
-                .border(1.dp, Palette.AmberDeep.copy(alpha = 0.25f), RoundedCornerShape(18.dp))
+                .border(1.dp, Palette.NightOutline, RoundedCornerShape(18.dp))
                 .pointerInput(ending) {
                     detectTapGestures(onLongPress = {
                         if (ending) return@detectTapGestures
@@ -127,7 +132,7 @@ fun NightScreen(sessionId: Long, onFinished: (Long) -> Unit) {
         ) {
             Text(
                 if (ending) "Calculando tu noche…" else "Mantén presionado para terminar la noche",
-                style = MaterialTheme.typography.labelLarge, color = Palette.AmberDeep.copy(alpha = 0.6f),
+                style = MaterialTheme.typography.labelLarge, color = Palette.NightTextSecondary,
             )
         }
     }
