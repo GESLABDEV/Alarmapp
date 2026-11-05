@@ -28,7 +28,10 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import androidx.compose.foundation.clickable
 import com.alarmapp.core.sleep.SleepStage
 import com.alarmapp.ui.theme.Palette
 import com.alarmapp.ui.theme.stageLabel
@@ -45,6 +48,52 @@ fun formatDuration(minutes: Int?): String {
     val h = minutes / 60
     val m = minutes % 60
     return if (h > 0) "${h} h ${m} min" else "$m min"
+}
+
+/**
+ * Botón principal: relleno translúcido del color, borde y texto luminosos.
+ * Evita el texto negro y se lee bien en la oscuridad sin deslumbrar.
+ */
+@Composable
+fun GlowButton(
+    text: String,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+    color: Color = Palette.Amber,
+    enabled: Boolean = true,
+    height: Dp = 56.dp,
+    textStyle: TextStyle = MaterialTheme.typography.labelLarge,
+    fillAlpha: Float = 0.16f,
+) {
+    val c = if (enabled) color else color.copy(alpha = 0.35f)
+    val shape = RoundedCornerShape(18.dp)
+    Box(
+        modifier
+            .fillMaxWidth()
+            .height(height)
+            .clip(shape)
+            .background(c.copy(alpha = fillAlpha))
+            .border(1.5.dp, c, shape)
+            .clickable(enabled = enabled, onClick = onClick),
+        contentAlignment = Alignment.Center,
+    ) { Text(text, style = textStyle, color = c) }
+}
+
+/** Pestaña seleccionable con el mismo estilo luminoso. */
+@Composable
+fun GlowTab(label: String, selected: Boolean, modifier: Modifier = Modifier, onClick: () -> Unit) {
+    val shape = RoundedCornerShape(12.dp)
+    Box(
+        modifier
+            .clip(shape)
+            .background(if (selected) Palette.Amber.copy(alpha = 0.18f) else Color.Transparent)
+            .border(1.dp, if (selected) Palette.Amber else Color.Transparent, shape)
+            .clickable(onClick = onClick)
+            .padding(vertical = 12.dp),
+        contentAlignment = Alignment.Center,
+    ) {
+        Text(label, style = MaterialTheme.typography.labelLarge, color = if (selected) Palette.Amber else MaterialTheme.colorScheme.onSurfaceVariant)
+    }
 }
 
 /** Tarjeta minimalista: superficie apenas más clara que el fondo, sin sombras. */

@@ -1,6 +1,7 @@
 package com.alarmapp.ui.alarms
 
 import android.text.format.DateFormat
+import android.widget.Toast
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -19,8 +20,6 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.ArrowBack
-import androidx.compose.material3.Button
-import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -49,6 +48,8 @@ import com.alarmapp.core.sleep.CycleCalculator
 import com.alarmapp.core.sleep.SleepProfile
 import com.alarmapp.data.AlarmMode
 import com.alarmapp.ui.components.Card
+import com.alarmapp.ui.components.GlowButton
+import com.alarmapp.ui.components.GlowTab
 import com.alarmapp.ui.components.Overline
 import com.alarmapp.ui.components.formatTime
 import com.alarmapp.ui.home.HomeViewModel
@@ -70,7 +71,7 @@ fun AlarmSetupScreen(onBack: () -> Unit) {
     var mode by remember(alarm) { mutableStateOf(alarm?.mode?.takeIf { it != AlarmMode.RECOMMENDED } ?: AlarmMode.FIXED) }
     val initial = alarm?.minuteOfDay ?: (6 * 60)
     val picker = rememberTimePickerState(initial / 60, initial % 60, DateFormat.is24HourFormat(context))
-    var saved by remember { mutableStateOf(false) }
+    var saving by remember { mutableStateOf(false) }
 
     Column(
         Modifier
@@ -91,8 +92,8 @@ fun AlarmSetupScreen(onBack: () -> Unit) {
             Modifier.fillMaxWidth().clip(RoundedCornerShape(16.dp)).background(Palette.SurfaceHigh).padding(4.dp),
             horizontalArrangement = Arrangement.spacedBy(4.dp),
         ) {
-            Tab("Hora fija", mode == AlarmMode.FIXED, Modifier.weight(1f)) { mode = AlarmMode.FIXED; saved = false }
-            Tab("Modo inverso", mode == AlarmMode.INVERSE, Modifier.weight(1f)) { mode = AlarmMode.INVERSE; saved = false }
+            Tab("Hora fija", mode == AlarmMode.FIXED, Modifier.weight(1f)) { mode = AlarmMode.FIXED }
+            Tab("Modo inverso", mode == AlarmMode.INVERSE, Modifier.weight(1f)) { mode = AlarmMode.INVERSE }
         }
         Spacer(Modifier.height(12.dp))
         Text(
@@ -107,7 +108,9 @@ fun AlarmSetupScreen(onBack: () -> Unit) {
                 state = picker,
                 colors = TimePickerDefaults.colors(
                     clockDialColor = Palette.Surface,
-                    selectorColor = Palette.Amber,
+                    clockDialSelectedContentColor = Palette.Cream,
+                    clockDialUnselectedContentColor = Palette.TextPrimary,
+                    selectorColor = Palette.Ember,
                     timeSelectorSelectedContainerColor = Palette.Amber.copy(alpha = 0.18f),
                     timeSelectorSelectedContentColor = Palette.Amber,
                     timeSelectorUnselectedContainerColor = Palette.SurfaceHigh,
@@ -136,8 +139,11 @@ fun AlarmSetupScreen(onBack: () -> Unit) {
         }
 
         Spacer(Modifier.height(20.dp))
-        Button(
+        GlowButton(
+            text = if (saving) "Guardando…" else "Guardar alarma",
+            enabled = !saving,
             onClick = {
+                saving = true
                 scope.launch {
                     val minute = picker.hour * 60 + picker.minute
                     repo.saveAlarm(mode, minute, alarm?.soundUri)
@@ -147,13 +153,11 @@ fun AlarmSetupScreen(onBack: () -> Unit) {
                         AlarmScheduler.cancelFire(context)
                         AlarmScheduler.armDaily(context)
                     }
-                    saved = true
+                    Toast.makeText(context, "Alarma guardada", Toast.LENGTH_SHORT).show()
+                    onBack() // vuelve sola a la pantalla principal
                 }
             },
-            modifier = Modifier.fillMaxWidth().height(56.dp),
-            shape = RoundedCornerShape(18.dp),
-            colors = ButtonDefaults.buttonColors(containerColor = Palette.Amber, contentColor = Palette.Night),
-        ) { Text(if (saved) "Guardada ✓" else "Guardar alarma", style = MaterialTheme.typography.labelLarge) }
+        )
         Spacer(Modifier.height(12.dp))
         Text(
             "Suena todos los días a esta hora. Presiona \"Me voy a dormir\" para que además mida tu noche y te despierte en fase ligera.",
@@ -164,15 +168,5 @@ fun AlarmSetupScreen(onBack: () -> Unit) {
 }
 
 @Composable
-private fun Tab(label: String, selected: Boolean, modifier: Modifier, onClick: () -> Unit) {
-    Box(
-        modifier
-            .clip(RoundedCornerShape(12.dp))
-            .background(if (selected) Palette.Amber else Color.Transparent)
-            .clickable(onClick = onClick)
-            .padding(vertical = 12.dp),
-        contentAlignment = Alignment.Center,
-    ) {
-        Text(label, style = MaterialTheme.typography.labelLarge, color = if (selected) Palette.Night else MaterialTheme.colorScheme.onSurfaceVariant)
-    }
-}
+private fun Tab(label: String, selected: Boolean, modifier: Modifier, onClick: () -> Unit) =
+    GlowTab(label, selected, modifier, onClick)

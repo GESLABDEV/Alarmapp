@@ -37,16 +37,23 @@ object Palette {
     val AmberDeep = Color(0xFFFF8A3D)
     val Cyan = Color(0xFF3DD6F5)
     val Danger = Color(0xFFFF6B6B)
+    /** Naranja brasa: fondo de selección donde el texto es crema (contraste 5.3:1). */
+    val Ember = Color(0xFFC2410C)
+    /** Crema luminoso: texto sobre superficies de color, en lugar de negro. */
+    val Cream = Color(0xFFFFF3D6)
 
     val Deep = Color(0xFF8B7CF6)
     val Light = Color(0xFF48C6EF)
     val Rem = Color(0xFFD08BFA)
     val Awake = Amber
 
-    /** De noche a día: rojo profundo → naranja → ámbar → blanco cálido. */
+    /**
+     * De noche a amanecer: rojo profundo → brasa. Se detiene en un naranja oscuro para que
+     * el texto crema siempre se lea; la intensidad la aporta el brillo de la pantalla.
+     */
     val Sunrise = listOf(
-        Color(0xFF0B0E1A), Color(0xFF3A0F14), Color(0xFF8A2A17),
-        Color(0xFFE8572A), Color(0xFFFFB547), Color(0xFFFFF3D6),
+        Color(0xFF0B0E1A), Color(0xFF2A0B12), Color(0xFF5C1A14),
+        Color(0xFF8A2A17), Color(0xFFB23A12), Color(0xFFC2410C),
     )
 
     fun stage(s: SleepStage): Color = when (s) {
@@ -67,9 +74,9 @@ fun stageLabel(s: SleepStage?): String = when (s) {
 
 private val scheme = darkColorScheme(
     primary = Palette.Amber,
-    onPrimary = Palette.Night,
+    onPrimary = Palette.Cream,
     secondary = Palette.Cyan,
-    onSecondary = Palette.Night,
+    onSecondary = Palette.Cream,
     tertiary = Palette.Rem,
     background = Palette.Night,
     onBackground = Palette.TextPrimary,
@@ -77,6 +84,7 @@ private val scheme = darkColorScheme(
     onSurface = Palette.TextPrimary,
     surfaceVariant = Palette.SurfaceHigh,
     onSurfaceVariant = Palette.TextSecondary,
+    onError = Palette.Cream,
     surfaceContainer = Palette.Surface,
     surfaceContainerHigh = Palette.SurfaceHigh,
     surfaceContainerHighest = Palette.SurfaceHigh,

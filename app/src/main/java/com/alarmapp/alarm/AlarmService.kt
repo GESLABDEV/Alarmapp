@@ -19,6 +19,7 @@ import android.os.VibratorManager
 import androidx.core.app.ServiceCompat
 import androidx.core.content.ContextCompat
 import com.alarmapp.app
+import com.alarmapp.util.LockScreen
 import com.alarmapp.util.Notifications
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -88,6 +89,9 @@ class AlarmService : Service() {
     private fun start(intent: Intent) {
         val type = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PLAYBACK else 0
         ServiceCompat.startForeground(this, Notifications.ID_ALARM, Notifications.alarm(this, "Toca para ver la alarma"), type)
+        // Pantalla apagada o bloqueada: se enciende y se abre la alarma encima del bloqueo.
+        LockScreen.wakeScreen(this)
+        LockScreen.launch(this, AlarmActivity::class.java)
 
         stopOutputs()
         sequence?.cancel()

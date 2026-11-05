@@ -193,12 +193,12 @@ private fun RatingCard(rating: Int?, onRate: (Int) -> Unit) {
                         .weight(1f)
                         .aspectRatio(1f)
                         .clip(RoundedCornerShape(16.dp))
-                        .background(if (selected) c else c.copy(alpha = 0.12f))
-                        .border(1.dp, c.copy(alpha = if (selected) 1f else 0.4f), RoundedCornerShape(16.dp))
+                        .background(c.copy(alpha = if (selected) 0.28f else 0.10f))
+                        .border(if (selected) 2.dp else 1.dp, c.copy(alpha = if (selected) 1f else 0.4f), RoundedCornerShape(16.dp))
                         .clickable { onRate(n) },
                     contentAlignment = Alignment.Center,
                 ) {
-                    Text("$n", style = MaterialTheme.typography.titleLarge, color = if (selected) Palette.Night else c)
+                    Text("$n", style = MaterialTheme.typography.titleLarge, color = c)
                 }
             }
         }

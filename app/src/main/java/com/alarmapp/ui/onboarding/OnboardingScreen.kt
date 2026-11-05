@@ -12,14 +12,13 @@ import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material3.Button
-import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import com.alarmapp.ui.components.Card
+import com.alarmapp.ui.components.GlowButton
 import com.alarmapp.ui.components.Overline
 import com.alarmapp.ui.settings.PermissionList
 import com.alarmapp.ui.theme.Palette
@@ -53,11 +52,6 @@ fun OnboardingScreen(onDone: () -> Unit) {
             style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
         Spacer(Modifier.height(24.dp))
-        Button(
-            onClick = onDone,
-            modifier = Modifier.fillMaxWidth().height(56.dp),
-            shape = RoundedCornerShape(18.dp),
-            colors = ButtonDefaults.buttonColors(containerColor = Palette.Amber, contentColor = Palette.Night),
-        ) { Text("Empezar", style = MaterialTheme.typography.labelLarge) }
+        GlowButton(text = "Empezar", onClick = onDone)
     }
 }

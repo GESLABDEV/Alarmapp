@@ -64,6 +64,11 @@ fun PermissionList() {
         Item("Pantalla completa", "Para mostrar la alarma con el celular bloqueado.", Permissions::fullScreen) {
             open(Permissions.fullScreenSettings(context))
         },
+        Item(
+            "Mostrar sobre otras apps",
+            "Para que la pantalla de la alarma se abra sola con el celular bloqueado o la pantalla apagada.",
+            Permissions::overlay,
+        ) { open(Permissions.overlaySettings(context)) },
         Item("Micrófono", "Analiza el sonido en el celular para estimar tu respiración. Nunca se graba ni se guarda audio.", Permissions::mic) {
             runtime.launch(Manifest.permission.RECORD_AUDIO)
         },
@@ -73,6 +78,14 @@ fun PermissionList() {
     )
 
     Column {
+        if (Permissions.isXiaomi()) {
+            Text(
+                "En Xiaomi, Redmi o POCO activa también en Ajustes → Apps → Alarmapp → Otros permisos: " +
+                    "\"Mostrar en pantalla de bloqueo\" y \"Mostrar ventanas emergentes mientras se ejecuta en segundo plano\".",
+                style = MaterialTheme.typography.bodyMedium, color = Palette.Amber,
+                modifier = Modifier.padding(vertical = 8.dp).clickable { open(Permissions.appSettings(context)) },
+            )
+        }
         items.forEach { item ->
             val ok = remember(refresh) { item.granted(context) }
             Row(

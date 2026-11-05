@@ -27,8 +27,6 @@ import androidx.compose.material.icons.outlined.Bedtime
 import androidx.compose.material.icons.outlined.ChevronRight
 import androidx.compose.material.icons.outlined.Settings
 import androidx.compose.material.icons.outlined.WbTwilight
-import androidx.compose.material3.Button
-import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -58,6 +56,8 @@ import com.alarmapp.core.sleep.CycleCalculator
 import com.alarmapp.core.sleep.SmartWake
 import com.alarmapp.data.AlarmMode
 import com.alarmapp.ui.components.Card
+import com.alarmapp.ui.components.GlowButton
+import com.alarmapp.ui.components.GlowTab
 import com.alarmapp.ui.components.Overline
 import com.alarmapp.ui.components.formatDuration
 import com.alarmapp.ui.components.formatTime
@@ -167,13 +167,17 @@ private fun SleepButton(onClick: () -> Unit) {
             contentAlignment = Alignment.Center,
         ) {
             Box(
-                Modifier.size(168.dp).clip(CircleShape).background(Palette.Amber),
+                Modifier
+                    .size(168.dp)
+                    .clip(CircleShape)
+                    .background(Palette.Amber.copy(alpha = 0.14f))
+                    .border(2.dp, Palette.Amber, CircleShape),
                 contentAlignment = Alignment.Center,
             ) {
                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                    Icon(Icons.Outlined.Bedtime, null, tint = Palette.Night, modifier = Modifier.size(36.dp))
+                    Icon(Icons.Outlined.Bedtime, null, tint = Palette.Amber, modifier = Modifier.size(36.dp))
                     Spacer(Modifier.height(6.dp))
-                    Text("Me voy a\ndormir", style = MaterialTheme.typography.titleMedium, color = Palette.Night, textAlign = TextAlign.Center)
+                    Text("Me voy a\ndormir", style = MaterialTheme.typography.titleMedium, color = Palette.Amber, textAlign = TextAlign.Center)
                 }
             }
         }
@@ -266,9 +270,10 @@ private fun BedtimeSheet(
             }
 
             Spacer(Modifier.height(24.dp))
-            Button(
+            GlowButton(
+                text = "Iniciar la noche",
                 onClick = {
-                    val d = deadline ?: return@Button
+                    val d = deadline ?: return@GlowButton
                     starting = true
                     scope.launch {
                         val id = vm.startNight(context, if (mode == AlarmMode.RECOMMENDED) AlarmMode.RECOMMENDED else alarm!!.mode, d)
@@ -276,27 +281,14 @@ private fun BedtimeSheet(
                     }
                 },
                 enabled = deadline != null && !starting,
-                modifier = Modifier.fillMaxWidth().height(56.dp),
-                shape = RoundedCornerShape(18.dp),
-                colors = ButtonDefaults.buttonColors(containerColor = Palette.Amber, contentColor = Palette.Night),
-            ) { Text("Iniciar la noche", style = MaterialTheme.typography.labelLarge) }
+            )
         }
     }
 }
 
 @Composable
-private fun ModeTab(label: String, selected: Boolean, modifier: Modifier, onClick: () -> Unit) {
-    Box(
-        modifier
-            .clip(RoundedCornerShape(12.dp))
-            .background(if (selected) Palette.Amber else Color.Transparent)
-            .clickable(onClick = onClick)
-            .padding(vertical = 12.dp),
-        contentAlignment = Alignment.Center,
-    ) {
-        Text(label, style = MaterialTheme.typography.labelLarge, color = if (selected) Palette.Night else MaterialTheme.colorScheme.onSurfaceVariant)
-    }
-}
+private fun ModeTab(label: String, selected: Boolean, modifier: Modifier, onClick: () -> Unit) =
+    GlowTab(label, selected, modifier, onClick)
 
 @Composable
 private fun TimeOption(time: String, caption: String, selected: Boolean, modifier: Modifier, onClick: () -> Unit) {

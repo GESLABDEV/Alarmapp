@@ -16,8 +16,6 @@ import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.Button
-import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.LaunchedEffect
@@ -29,8 +27,10 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import com.alarmapp.ui.components.GlowButton
 import com.alarmapp.ui.theme.AlarmappTheme
 import com.alarmapp.ui.theme.Palette
+import com.alarmapp.util.LockScreen
 import com.alarmapp.util.Notifications
 import kotlinx.coroutines.delay
 
@@ -39,6 +39,7 @@ class WakeCheckActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        LockScreen.showOverLock(this)
         enableEdgeToEdge()
         setContent {
             AlarmappTheme {
@@ -60,12 +61,13 @@ class WakeCheckActivity : ComponentActivity() {
                         textAlign = TextAlign.Center,
                     )
                     Spacer(Modifier.height(40.dp))
-                    Button(
+                    GlowButton(
+                        text = "Sí, estoy despierto",
                         onClick = ::confirm,
-                        modifier = Modifier.fillMaxWidth().height(64.dp),
-                        shape = RoundedCornerShape(20.dp),
-                        colors = ButtonDefaults.buttonColors(containerColor = Palette.Cyan, contentColor = Palette.Night),
-                    ) { Text("Sí, estoy despierto", style = MaterialTheme.typography.titleMedium) }
+                        color = Palette.Cyan,
+                        height = 64.dp,
+                        textStyle = MaterialTheme.typography.titleMedium,
+                    )
                 }
             }
         }

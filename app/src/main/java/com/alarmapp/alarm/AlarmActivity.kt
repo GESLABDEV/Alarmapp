@@ -22,10 +22,7 @@ import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.Button
-import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -41,6 +38,8 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.unit.dp
 import com.alarmapp.ui.MainActivity
+import com.alarmapp.util.LockScreen
+import com.alarmapp.ui.components.GlowButton
 import com.alarmapp.ui.components.formatTime
 import com.alarmapp.ui.theme.AlarmappTheme
 import com.alarmapp.ui.theme.Palette
@@ -56,8 +55,8 @@ class AlarmActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        LockScreen.showOverLock(this)
         enableEdgeToEdge()
-        window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
         setContent {
             AlarmappTheme {
                 val state by AlarmController.state.collectAsState()
@@ -111,8 +110,8 @@ private fun AlarmScreen(state: AlarmController.State, onSnooze: () -> Unit, onDi
 
     val top = sunrise(light * 0.85f)
     val bottom = sunrise(light)
-    val onLight = light > 0.75f
-    val content = if (onLight) Palette.Night else Palette.TextPrimary
+    // Texto crema sobre el amanecer: nunca negro.
+    val content = Palette.Cream
 
     Column(
         Modifier
@@ -139,24 +138,22 @@ private fun AlarmScreen(state: AlarmController.State, onSnooze: () -> Unit, onDi
         }
 
         Column(Modifier.fillMaxWidth()) {
-            Button(
+            GlowButton(
+                text = "Apagar",
                 onClick = onDismiss,
-                modifier = Modifier.fillMaxWidth().height(64.dp),
-                shape = RoundedCornerShape(20.dp),
-                colors = ButtonDefaults.buttonColors(
-                    containerColor = if (onLight) Palette.Night else Palette.Amber,
-                    contentColor = if (onLight) Palette.Amber else Palette.Night,
-                ),
-            ) { Text("Apagar", style = MaterialTheme.typography.titleMedium) }
+                color = Palette.Cream,
+                height = 72.dp,
+                textStyle = MaterialTheme.typography.titleLarge,
+                fillAlpha = 0.22f,
+            )
             Spacer(Modifier.height(12.dp))
             if (state.snoozesLeft > 0) {
-                OutlinedButton(
+                GlowButton(
+                    text = "Posponer 5 min · quedan ${state.snoozesLeft}",
                     onClick = onSnooze,
-                    modifier = Modifier.fillMaxWidth().height(56.dp),
-                    shape = RoundedCornerShape(20.dp),
-                ) {
-                    Text("Posponer 5 min · quedan ${state.snoozesLeft}", color = content, style = MaterialTheme.typography.labelLarge)
-                }
+                    color = Palette.Cream.copy(alpha = 0.85f),
+                    fillAlpha = 0.08f,
+                )
             } else {
                 Box(
                     Modifier.fillMaxWidth().border(1.dp, content.copy(alpha = 0.3f), RoundedCornerShape(20.dp)).padding(16.dp),

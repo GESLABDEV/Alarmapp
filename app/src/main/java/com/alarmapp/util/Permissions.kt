@@ -30,8 +30,17 @@ object Permissions {
     fun batteryUnrestricted(c: Context): Boolean =
         c.getSystemService(PowerManager::class.java).isIgnoringBatteryOptimizations(c.packageName)
 
-    /** Lo indispensable para que la alarma suene (RNF2). */
-    fun alarmReady(c: Context) = notifications(c) && exactAlarms(c)
+    /** Permite abrir la alarma desde segundo plano, encima del bloqueo o de otra app. */
+    fun overlay(c: Context): Boolean = Settings.canDrawOverlays(c)
+
+    /** Lo indispensable para que la alarma suene y se vea con el celular bloqueado (RNF2). */
+    fun alarmReady(c: Context) = notifications(c) && exactAlarms(c) && fullScreen(c) && overlay(c)
+
+    fun overlaySettings(c: Context): Intent =
+        Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION, Uri.parse("package:${c.packageName}"))
+
+    fun isXiaomi(): Boolean = Build.MANUFACTURER.equals("Xiaomi", ignoreCase = true) ||
+        Build.BRAND.equals("Redmi", ignoreCase = true) || Build.BRAND.equals("POCO", ignoreCase = true)
 
     fun exactAlarmSettings(c: Context): Intent? =
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S)

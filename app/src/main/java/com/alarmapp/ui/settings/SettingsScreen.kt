@@ -42,9 +42,11 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import com.alarmapp.BuildConfig
+import com.alarmapp.alarm.AlarmScheduler
 import com.alarmapp.alarm.AlarmStore
 import com.alarmapp.app
 import com.alarmapp.ui.components.Card
+import com.alarmapp.ui.components.GlowButton
 import com.alarmapp.ui.components.Metric
 import com.alarmapp.ui.components.Overline
 import com.alarmapp.ui.theme.Palette
@@ -87,6 +89,22 @@ fun SettingsScreen(onBack: () -> Unit) {
         }
 
         Spacer(Modifier.height(8.dp))
+        var testScheduled by remember { mutableStateOf(false) }
+        val nightActive = AlarmStore.activeSession(context) != null
+        GlowButton(
+            text = when {
+                nightActive -> "Prueba no disponible durante la noche"
+                testScheduled -> "Sonará en 1 minuto · bloquea el celular"
+                else -> "Probar alarma en 1 minuto"
+            },
+            enabled = !nightActive && !testScheduled,
+            onClick = {
+                val at = System.currentTimeMillis() + 60_000
+                AlarmScheduler.scheduleFire(context, AlarmScheduler.NO_SESSION, at, at, AlarmStore.Kind.DEADLINE)
+                testScheduled = true
+            },
+        )
+        Spacer(Modifier.height(16.dp))
         Card {
             Overline("Lo que la app aprendió de ti")
             Spacer(Modifier.height(14.dp))
@@ -149,7 +167,7 @@ fun SettingsScreen(onBack: () -> Unit) {
                             if (v) com.alarmapp.sync.SummaryUploadWorker.enqueue(context)
                         }
                     },
-                    colors = SwitchDefaults.colors(checkedTrackColor = Palette.Cyan, checkedThumbColor = Palette.Night),
+                    colors = SwitchDefaults.colors(checkedTrackColor = Palette.Cyan.copy(alpha = 0.45f), checkedThumbColor = Palette.Cyan, checkedBorderColor = Palette.Cyan),
                 )
             }
             Spacer(Modifier.height(12.dp))
@@ -176,7 +194,7 @@ fun SettingsScreen(onBack: () -> Unit) {
                     // Se borran también la alarma diaria y el sonido guardados fuera de la base.
                     AlarmStore.setDailyMinute(context, null)
                     AlarmStore.setSoundUri(context, null)
-                    if (AlarmStore.activeSession(context) == null) com.alarmapp.alarm.AlarmScheduler.cancelAll(context)
+                    if (AlarmStore.activeSession(context) == null) AlarmScheduler.cancelAll(context)
                     scope.launch { repo.deleteAllData(); deleted = true }
                 }) { Text("Borrar", color = Palette.Danger) }
             },
