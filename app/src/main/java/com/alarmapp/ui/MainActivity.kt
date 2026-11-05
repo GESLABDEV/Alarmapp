@@ -20,6 +20,7 @@ import com.alarmapp.monitor.SleepMonitorService
 import com.alarmapp.ui.alarms.AlarmListScreen
 import com.alarmapp.ui.alarms.AlarmSetupScreen
 import com.alarmapp.ui.home.HomeScreen
+import com.alarmapp.ui.insights.InsightsScreen
 import com.alarmapp.ui.night.NightScreen
 import com.alarmapp.ui.onboarding.OnboardingScreen
 import com.alarmapp.ui.report.ReportScreen
@@ -69,6 +70,7 @@ class MainActivity : ComponentActivity() {
                         HomeScreen(
                             onOpenAlarms = { nav.navigate("alarms") },
                             onNewAlarm = { nav.navigate("alarm/-1") },
+                            onOpenInsights = { nav.navigate("insights") },
                             onOpenSettings = { nav.navigate("settings") },
                             onOpenReport = { nav.navigate("report/$it") },
                             onNightStarted = { nav.navigate("night/$it") { popUpTo("home") } },
@@ -83,6 +85,9 @@ class MainActivity : ComponentActivity() {
                     composable("alarm/{alarmId}", arguments = listOf(navArgument("alarmId") { type = NavType.LongType })) { entry ->
                         val id = entry.arguments?.getLong("alarmId")?.takeIf { it >= 0 }
                         AlarmSetupScreen(alarmId = id, onBack = { nav.popBackStack() })
+                    }
+                    composable("insights") {
+                        InsightsScreen(onBack = { nav.popBackStack() }, onOpenNight = { nav.navigate("report/$it") })
                     }
                     composable("settings") { SettingsScreen(onBack = { nav.popBackStack() }) }
                     composable("night/{sessionId}", arguments = listOf(navArgument("sessionId") { type = NavType.LongType })) { entry ->

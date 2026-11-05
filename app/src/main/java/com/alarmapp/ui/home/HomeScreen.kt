@@ -23,6 +23,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Add
 import androidx.compose.material.icons.outlined.Alarm
+import androidx.compose.material.icons.outlined.BarChart
 import androidx.compose.material.icons.outlined.BatteryAlert
 import androidx.compose.material.icons.outlined.Bedtime
 import androidx.compose.material.icons.outlined.ChevronRight
@@ -74,6 +75,7 @@ fun HomeScreen(
     onOpenAlarms: () -> Unit,
     onNewAlarm: () -> Unit,
     onOpenSettings: () -> Unit,
+    onOpenInsights: () -> Unit,
     onOpenReport: (Long) -> Unit,
     onNightStarted: (Long) -> Unit,
     vm: HomeViewModel = viewModel(),
@@ -94,6 +96,9 @@ fun HomeScreen(
             Column(Modifier.weight(1f)) {
                 Overline(greeting())
                 Text("Alarmapp", style = MaterialTheme.typography.headlineMedium)
+            }
+            IconButton(onClick = onOpenInsights) {
+                Icon(Icons.Outlined.BarChart, contentDescription = "Reportes", tint = Palette.PrimaryText)
             }
             IconButton(onClick = onOpenSettings) {
                 Icon(Icons.Outlined.Settings, contentDescription = "Ajustes", tint = MaterialTheme.colorScheme.onSurfaceVariant)
@@ -149,6 +154,11 @@ fun HomeScreen(
                     }
                     Icon(Icons.Outlined.ChevronRight, null, tint = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
+            }
+        }
+        if (state.lastNight != null) {
+            TextButton(onClick = onOpenInsights, modifier = Modifier.align(Alignment.CenterHorizontally)) {
+                Text("Ver todos mis reportes", color = Palette.PrimaryText, style = MaterialTheme.typography.labelLarge)
             }
         }
         Spacer(Modifier.height(20.dp))

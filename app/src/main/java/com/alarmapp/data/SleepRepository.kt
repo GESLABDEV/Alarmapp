@@ -1,6 +1,7 @@
 package com.alarmapp.data
 
 import com.alarmapp.core.sleep.Epoch
+import com.alarmapp.core.sleep.Insights
 import com.alarmapp.core.sleep.NightSummary
 import com.alarmapp.core.sleep.PhaseEstimator
 import com.alarmapp.core.sleep.ProfileLearner
@@ -87,6 +88,26 @@ class SleepRepository(private val db: AppDatabase) {
     fun observeLastFinished(): Flow<SleepSessionEntity?> = dao.observeLastFinished()
 
     fun observeHistory(): Flow<List<SleepSessionEntity>> = dao.observeHistory()
+
+    /** Noches desde [since] listas para el resumen de Reportes. */
+    fun observeNights(since: Long): Flow<List<Insights.Night>> = dao.observeNightsSince(since).map { rows ->
+        rows.map { (s, score) ->
+            Insights.Night(
+                id = s.id,
+                start = s.startTime,
+                end = s.endTime ?: s.startTime,
+                totalSleepMinutes = s.totalSleepMinutes ?: 0,
+                latencyMinutes = s.latencyMinutes,
+                lightMinutes = s.lightMinutes ?: 0,
+                deepMinutes = s.deepMinutes ?: 0,
+                remMinutes = s.remMinutes ?: 0,
+                awakeMinutes = s.awakeMinutes ?: 0,
+                wakeStage = s.wakeStage,
+                snoozes = s.snoozeCount,
+                rating = score,
+            )
+        }
+    }
 
     suspend fun incrementSnooze(id: Long) = dao.incrementSnooze(id)
 

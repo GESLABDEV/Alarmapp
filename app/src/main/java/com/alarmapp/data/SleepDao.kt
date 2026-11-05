@@ -1,6 +1,8 @@
 package com.alarmapp.data
 
+import androidx.room.ColumnInfo
 import androidx.room.Dao
+import androidx.room.Embedded
 import androidx.room.Insert
 import androidx.room.OnConflictStrategy
 import androidx.room.Query
@@ -66,6 +68,14 @@ interface SleepDao {
     @Query("SELECT * FROM sleep_session WHERE endTime IS NOT NULL ORDER BY startTime DESC LIMIT :limit")
     fun observeHistory(limit: Int = 14): Flow<List<SleepSessionEntity>>
 
+    /** Noches cerradas desde [since], con su calificación si la hay (sección Reportes). */
+    @Query(
+        "SELECT s.*, r.score AS score FROM sleep_session s " +
+            "LEFT JOIN rating r ON r.sessionId = s.id " +
+            "WHERE s.endTime IS NOT NULL AND s.startTime >= :since ORDER BY s.startTime DESC"
+    )
+    fun observeNightsSince(since: Long): Flow<List<SessionWithRating>>
+
     @Query("SELECT * FROM sleep_session WHERE endTime IS NULL")
     suspend fun openSessions(): List<SleepSessionEntity>
 
@@ -100,3 +110,8 @@ interface SleepDao {
     @Query("UPDATE rating SET uploaded = 1 WHERE id = :id")
     suspend fun markUploaded(id: Long)
 }
+
+data class SessionWithRating(
+    @Embedded val session: SleepSessionEntity,
+    @ColumnInfo(name = "score") val score: Int?,
+)
