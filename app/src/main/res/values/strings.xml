@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Alarmapp</string>
+    <string name="channel_monitor">Monitoreo del sueño</string>
+    <string name="channel_monitor_desc">Notificación fija mientras se mide tu noche</string>
+    <string name="channel_alarm">Alarma</string>
+    <string name="channel_alarm_desc">Alarma de despertar y verificación</string>
+</resources>
