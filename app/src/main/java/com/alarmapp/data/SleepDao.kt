@@ -8,6 +8,7 @@ import androidx.room.OnConflictStrategy
 import androidx.room.Query
 import androidx.room.Transaction
 import androidx.room.Update
+import androidx.room.Upsert
 import com.alarmapp.core.sleep.SleepStage
 import kotlinx.coroutines.flow.Flow
 
@@ -21,7 +22,12 @@ interface SleepDao {
     @Query("SELECT * FROM profile WHERE id = 1")
     fun observeProfile(): Flow<ProfileEntity?>
 
-    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    /**
+     * @Upsert actualiza la fila si ya existe. NO usar REPLACE aquí: en SQLite, REPLACE borra
+     * la fila y la vuelve a insertar, y ese borrado dispara ON DELETE CASCADE, que eliminaba
+     * todas las alarmas y todas las noches cada vez que se guardaba el perfil.
+     */
+    @Upsert
     suspend fun upsertProfile(p: ProfileEntity)
 
     // -------- Alarmas
