@@ -67,7 +67,7 @@ class SleepMonitorService : LifecycleService() {
         _running.value = sessionId
         val repo = app.repository
         val estimator = PhaseEstimator(cycle)
-        val source: SleepDataSource = PhoneSensorSource(this)
+        val source: SleepDataSource = PhoneSensorSource(this) { _mic.value = it }
         val night = ArrayList<Epoch>()
         val stages = ArrayList<SleepStage>()
         val decisionDeadline = deadline - AlarmScheduler.LIGHT_LEAD_MS
@@ -98,6 +98,7 @@ class SleepMonitorService : LifecycleService() {
         wakeLock?.takeIf { it.isHeld }?.release()
         wakeLock = null
         _running.value = null
+        _mic.value = null
         ServiceCompat.stopForeground(this, ServiceCompat.STOP_FOREGROUND_REMOVE)
         stopSelf()
     }
@@ -120,6 +121,10 @@ class SleepMonitorService : LifecycleService() {
         private val _running = MutableStateFlow<Long?>(null)
         /** Id de la sesión que se está midiendo, o null. */
         val running: StateFlow<Long?> = _running.asStateFlow()
+
+        private val _mic = MutableStateFlow<PhoneSensorSource.MicState?>(null)
+        /** Estado del micrófono durante la medición, o null si no se está midiendo. */
+        val mic: StateFlow<PhoneSensorSource.MicState?> = _mic.asStateFlow()
 
         /** Debe llamarse con la app en primer plano (al presionar "Me voy a dormir"). */
         fun start(context: Context, sessionId: Long, deadline: Long, window: Int, cycleMinutes: Double) {

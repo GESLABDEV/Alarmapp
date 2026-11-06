@@ -34,7 +34,13 @@ import kotlin.math.sqrt
  * Batería (RNF1): el acelerómetro va a 10 Hz con eventos agrupados por el hardware,
  * y el micrófono escucha 20 s de cada intervalo de 30 s.
  */
-class PhoneSensorSource(private val context: Context) : SleepDataSource {
+class PhoneSensorSource(
+    private val context: Context,
+    /** Informa si el micrófono está entregando sonido real (se muestra en la pantalla nocturna). */
+    private val onMicState: (MicState) -> Unit = {},
+) : SleepDataSource {
+
+    enum class MicState { NO_PERMISSION, UNAVAILABLE, BLOCKED, LISTENING }
 
     override val id: String = "phone"
 
@@ -54,6 +60,13 @@ class PhoneSensorSource(private val context: Context) : SleepDataSource {
             sensorManager.registerListener(listener, accel, ACCEL_PERIOD_US, ACCEL_BATCH_US)
         }
         val audio = if (hasMicPermission()) MicSampler() else null
+        onMicState(
+            when {
+                !hasMicPermission() -> MicState.NO_PERMISSION
+                audio?.available != true -> MicState.UNAVAILABLE
+                else -> MicState.LISTENING
+            }
+        )
 
         try {
             val start = System.currentTimeMillis()
@@ -61,6 +74,10 @@ class PhoneSensorSource(private val context: Context) : SleepDataSource {
             while (isActive) {
                 val epochEnd = start + (index + 1) * EPOCH_MS
                 val sound = audio?.listen(LISTEN_MS)
+                if (audio != null && audio.available) {
+                    // Sonido exactamente en cero = el sistema está bloqueando el micrófono.
+                    onMicState(if (sound == null || audio.lastWasSilent) MicState.BLOCKED else MicState.LISTENING)
+                }
                 val wait = epochEnd - System.currentTimeMillis()
                 if (wait > 0) delay(wait)
                 if (accel != null) sensorManager.flush(listener)
@@ -107,12 +124,25 @@ class PhoneSensorSource(private val context: Context) : SleepDataSource {
     @SuppressLint("MissingPermission")
     private class MicSampler {
         private val minBuf = AudioRecord.getMinBufferSize(SAMPLE_RATE, AudioFormat.CHANNEL_IN_MONO, AudioFormat.ENCODING_PCM_16BIT)
-        private val record: AudioRecord? = runCatching {
-            AudioRecord(
-                MediaRecorder.AudioSource.MIC, SAMPLE_RATE, AudioFormat.CHANNEL_IN_MONO,
-                AudioFormat.ENCODING_PCM_16BIT, maxOf(minBuf, FRAME_SAMPLES * 4),
-            ).takeIf { it.state == AudioRecord.STATE_INITIALIZED }
-        }.getOrNull()
+        // Algunos fabricantes no abren la fuente MIC en segundo plano: se prueban otras.
+        private val record: AudioRecord? = listOf(
+            MediaRecorder.AudioSource.MIC,
+            MediaRecorder.AudioSource.VOICE_RECOGNITION,
+            MediaRecorder.AudioSource.DEFAULT,
+        ).firstNotNullOfOrNull { source ->
+            runCatching {
+                val r = AudioRecord(
+                    source, SAMPLE_RATE, AudioFormat.CHANNEL_IN_MONO,
+                    AudioFormat.ENCODING_PCM_16BIT, maxOf(minBuf, FRAME_SAMPLES * 4),
+                )
+                if (r.state == AudioRecord.STATE_INITIALIZED) r else { r.release(); null }
+            }.getOrNull()
+        }
+
+        val available: Boolean get() = record != null
+        /** La última escucha devolvió solo ceros (micrófono silenciado por el sistema). */
+        var lastWasSilent = false
+            private set
 
         fun listen(durationMs: Long): SoundStats? {
             val rec = record ?: return null
@@ -145,6 +175,7 @@ class PhoneSensorSource(private val context: Context) : SleepDataSource {
                 frame.fill(0) // el audio no sobrevive a este método
             }
             if (got == 0) return null
+            lastWasSilent = rmsSum == 0.0
             return SoundStats(
                 noiseDb = SignalMath.rmsToDb(rmsSum / got),
                 breathing = BreathingAnalyzer.analyze(envelope.copyOf(got), 1000f / FRAME_MS),

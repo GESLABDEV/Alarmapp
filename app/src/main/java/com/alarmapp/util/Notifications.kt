@@ -22,6 +22,7 @@ object Notifications {
     const val ID_ALARM = 20
     const val ID_WAKE_CHECK = 30
     const val ID_UPCOMING = 40
+    const val ID_STANDBY = 50
     const val CHANNEL_UPCOMING = "upcoming"
 
     private const val AMBER = 0xFF6E5BB8.toInt() // lavanda de la marca
@@ -108,6 +109,22 @@ object Notifications {
             .setAutoCancel(true)
             .build()
     }
+
+    /**
+     * Notificación fija mientras se espera "¿Sigues despierto?" o el fin de posponer.
+     * Mantiene la app en primer plano para que el sistema (p. ej. Xiaomi) no la cierre.
+     */
+    fun standby(context: Context, text: String): Notification =
+        NotificationCompat.Builder(context, CHANNEL_MONITOR)
+            .setSmallIcon(R.drawable.ic_launcher_foreground)
+            .setColor(AMBER)
+            .setContentTitle("Alarma pendiente")
+            .setContentText(text)
+            .setOngoing(true)
+            .setSilent(true)
+            .setCategory(NotificationCompat.CATEGORY_ALARM)
+            .setContentIntent(openApp(context))
+            .build()
 
     /** Aviso silencioso de la próxima alarma, con opción de omitirla esta vez. */
     fun postUpcoming(context: Context, soundAt: Long) {

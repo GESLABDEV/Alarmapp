@@ -38,6 +38,7 @@ import com.alarmapp.alarm.AlarmScheduler
 import com.alarmapp.alarm.AlarmStore
 import com.alarmapp.app
 import com.alarmapp.core.sleep.SmartWake
+import com.alarmapp.monitor.PhoneSensorSource
 import com.alarmapp.monitor.SleepMonitorService
 import com.alarmapp.ui.components.formatTime
 import com.alarmapp.ui.theme.Palette
@@ -54,6 +55,7 @@ fun NightScreen(sessionId: Long, onFinished: (Long) -> Unit) {
     val repo = context.app.repository
     val scope = rememberCoroutineScope()
     val running by SleepMonitorService.running.collectAsState()
+    val mic by SleepMonitorService.mic.collectAsState()
     val session by produceState<com.alarmapp.data.SleepSessionEntity?>(null, sessionId) { value = repo.session(sessionId) }
     var now by remember { mutableLongStateOf(System.currentTimeMillis()) }
     var ending by remember { mutableStateOf(false) }
@@ -105,6 +107,20 @@ fun NightScreen(sessionId: Long, onFinished: (Long) -> Unit) {
                 style = MaterialTheme.typography.bodyMedium, color = Palette.NightTextTertiary,
                 textAlign = TextAlign.Center,
             )
+            if (running == sessionId) mic?.let { m ->
+                Spacer(Modifier.height(6.dp))
+                Text(
+                    when (m) {
+                        PhoneSensorSource.MicState.LISTENING -> "Micrófono: escuchando"
+                        PhoneSensorSource.MicState.BLOCKED -> "Micrófono bloqueado por el sistema: se mide solo el movimiento"
+                        PhoneSensorSource.MicState.UNAVAILABLE -> "No se pudo abrir el micrófono: se mide solo el movimiento"
+                        PhoneSensorSource.MicState.NO_PERMISSION -> "Sin permiso de micrófono: se mide solo el movimiento"
+                    },
+                    style = MaterialTheme.typography.bodySmall,
+                    color = if (m == PhoneSensorSource.MicState.LISTENING) Palette.NightTextTertiary else Palette.NightText,
+                    textAlign = TextAlign.Center,
+                )
+            }
         }
 
         Box(

@@ -110,6 +110,7 @@ class AlarmService : Service() {
         LockScreen.launch(this, AlarmActivity::class.java)
 
         getSystemService(android.app.NotificationManager::class.java).cancel(Notifications.ID_WAKE_CHECK)
+        getSystemService(android.app.NotificationManager::class.java).cancel(Notifications.ID_STANDBY)
         stopOutputs()
         sequence?.cancel()
         overrideSilence()
@@ -184,6 +185,7 @@ class AlarmService : Service() {
         ServiceCompat.startForeground(this, Notifications.ID_WAKE_CHECK, Notifications.wakeCheck(this), type)
         LockScreen.wakeScreen(this)
         LockScreen.launch(this, WakeCheckActivity::class.java)
+        getSystemService(android.app.NotificationManager::class.java).cancel(Notifications.ID_STANDBY)
         stopOutputs()
         sequence?.cancel()
         overrideSilence()
@@ -197,8 +199,9 @@ class AlarmService : Service() {
         startPlayer(CHECK_VOLUME)
         startVibration(strong = false)
         sequence = scope.launch {
-            delay(AlarmScheduler.WAKE_CHECK_TIMEOUT_MS + 30_000L)
-            finish(openReport = false) // respaldo: la alarma completa ya debió dispararse
+            delay(AlarmScheduler.WAKE_CHECK_TIMEOUT_MS + STANDBY_GRACE_MS)
+            // La alarma completa ya debió dispararse; si el sistema no la entregó, se dispara aquí.
+            if (!AlarmReceiver.deliverFire(this@AlarmService)) finish(openReport = false)
         }
     }
 
@@ -209,14 +212,16 @@ class AlarmService : Service() {
         val id = sessionId
         scope.launch(Dispatchers.IO) { runCatching { app.repository.incrementSnooze(id) } }
         AlarmScheduler.scheduleSnooze(this, id, deadline)
-        finish(openReport = false)
+        val at = AlarmStore.fire(this)?.fireAt ?: (System.currentTimeMillis() + AlarmScheduler.SNOOZE_MS)
+        finish(openReport = false, standByUntil = at, standByText = "Pospuesta hasta las ${timeText(at)}")
     }
 
     private fun dismiss() {
         val id = sessionId
         val alarmTime = soundStartedAt ?: System.currentTimeMillis()
         AlarmScheduler.cancelFire(this)
-        if (kind != AlarmStore.Kind.GUARANTEED) AlarmScheduler.scheduleWakeCheck(this, id)
+        val checks = kind != AlarmStore.Kind.GUARANTEED
+        if (checks) AlarmScheduler.scheduleWakeCheck(this, id)
         AlarmStore.setSnoozeCount(this, 0)
         AlarmStore.setActiveSession(this, null)
         AlarmStore.setLastDeadline(this, deadline)
@@ -227,10 +232,21 @@ class AlarmService : Service() {
         CoroutineScope(Dispatchers.IO).launch {
             runCatching { appRef.repository.finishSession(id, System.currentTimeMillis(), alarmTime) }
         }
-        finish(openReport = true)
+        val checkAt = AlarmStore.wakeCheck(this)?.at
+        if (checks && checkAt != null) {
+            finish(openReport = true, standByUntil = checkAt, standByText = "Te preguntaré si sigues despierto a las ${timeText(checkAt)}")
+        } else {
+            finish(openReport = true)
+        }
     }
 
-    private fun finish(openReport: Boolean) {
+    /**
+     * @param standByUntil si no es null, el servicio sigue en primer plano (en silencio) hasta
+     * esa hora. Algunos fabricantes (Xiaomi, Huawei…) cierran la app apenas queda en segundo
+     * plano y con ella pierden las alarmas programadas; así la app sigue viva y, si la alarma
+     * del sistema no llega, la dispara ella misma.
+     */
+    private fun finish(openReport: Boolean, standByUntil: Long? = null, standByText: String? = null) {
         sequence?.cancel()
         sequence = null
         unwatchScreenOff()
@@ -239,9 +255,39 @@ class AlarmService : Service() {
         AlarmController.update {
             AlarmController.State(dismissedSessionId = if (openReport) sessionId else null)
         }
+        if (standByUntil != null && standByUntil > System.currentTimeMillis() - STANDBY_GRACE_MS) {
+            standBy(standByUntil, standByText.orEmpty())
+            return
+        }
         ServiceCompat.stopForeground(this, ServiceCompat.STOP_FOREGROUND_REMOVE)
         stopSelf()
     }
+
+    private fun standBy(until: Long, text: String) {
+        val type = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PLAYBACK else 0
+        ServiceCompat.startForeground(this, Notifications.ID_STANDBY, Notifications.standby(this, text), type)
+        getSystemService(android.app.NotificationManager::class.java).cancel(Notifications.ID_ALARM)
+        val wait = (until - System.currentTimeMillis()).coerceAtLeast(0) + STANDBY_GRACE_MS
+        wakeLock = getSystemService(PowerManager::class.java)
+            .newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "alarmapp:standby")
+            .apply { acquire(wait + 60_000L) }
+        sequence = scope.launch {
+            delay(wait)
+            // Lo normal es que AlarmManager ya la haya disparado (y cancelado esta espera).
+            // Si no llegó, se dispara desde aquí.
+            val delivered = AlarmReceiver.deliverWakeCheck(this@AlarmService) || AlarmReceiver.deliverFire(this@AlarmService)
+            if (!delivered) {
+                sequence = null
+                wakeLock?.takeIf { it.isHeld }?.release()
+                wakeLock = null
+                ServiceCompat.stopForeground(this@AlarmService, ServiceCompat.STOP_FOREGROUND_REMOVE)
+                stopSelf()
+            }
+        }
+    }
+
+    private fun timeText(at: Long): String =
+        android.text.format.DateFormat.getTimeFormat(this).format(java.util.Date(at))
 
     // ---------------------------------------------------------------- salidas
 
@@ -456,6 +502,8 @@ class AlarmService : Service() {
         private const val RAMP_MS = 60_000L
         private const val ESCALATE_AFTER_MS = 120_000L
         private const val MAX_RING_MS = 60 * 60_000L
+        /** Margen para que AlarmManager entregue la alarma antes de usar el respaldo. */
+        private const val STANDBY_GRACE_MS = 20_000L
 
         fun start(context: Context, fire: AlarmStore.Fire) {
             val i = Intent(context, AlarmService::class.java)
