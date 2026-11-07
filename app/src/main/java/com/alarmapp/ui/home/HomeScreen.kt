@@ -29,7 +29,6 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Add
-import androidx.compose.material.icons.outlined.Alarm
 import androidx.compose.material.icons.outlined.BarChart
 import androidx.compose.material.icons.outlined.BatteryAlert
 import androidx.compose.material.icons.outlined.Bedtime
@@ -65,6 +64,8 @@ import com.alarmapp.core.alarm.AlarmTimes
 import com.alarmapp.core.sleep.CycleCalculator
 import com.alarmapp.core.sleep.SmartWake
 import com.alarmapp.data.AlarmMode
+import com.alarmapp.app
+import com.alarmapp.ui.alarms.AlarmItem
 import com.alarmapp.ui.components.Card
 import com.alarmapp.ui.components.GlowButton
 import com.alarmapp.ui.components.GlowTab
@@ -79,7 +80,7 @@ import java.util.Calendar
 
 @Composable
 fun HomeScreen(
-    onOpenAlarms: () -> Unit,
+    onEditAlarm: (Long) -> Unit,
     onNewAlarm: () -> Unit,
     onOpenSettings: () -> Unit,
     onOpenInsights: () -> Unit,
@@ -88,6 +89,7 @@ fun HomeScreen(
     vm: HomeViewModel = viewModel(),
 ) {
     val state by vm.state.collectAsState()
+    val context = LocalContext.current
     var sheetOpen by rememberSaveable { mutableStateOf(false) }
 
     Column(
@@ -122,36 +124,30 @@ fun HomeScreen(
 
         Spacer(Modifier.height(28.dp))
 
-        // Próxima alarma
-        Card(Modifier.clickable(onClick = onOpenAlarms)) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Icon(Icons.Outlined.Alarm, null, tint = Palette.PrimaryText)
-                Spacer(Modifier.width(14.dp))
-                Column(Modifier.weight(1f)) {
-                    val next = vm.nextAlarm()
-                    if (next == null) {
-                        Text(if (state.totalAlarms == 0) "Sin alarmas" else "Alarmas apagadas", style = MaterialTheme.typography.titleMedium)
-                        Text("Toca para crear o activar una", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                    } else {
-                        val (alarm, at) = next
-                        Overline("Próxima alarma")
-                        Text(formatTime(at), style = MaterialTheme.typography.displayMedium)
-                        Text(
-                            "${AlarmTimes.label(alarm.days)} · ${state.alarms.size} activa${if (state.alarms.size == 1) "" else "s"} de ${state.totalAlarms}",
-                            style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        )
-                    }
-                }
-                Icon(Icons.Outlined.ChevronRight, null, tint = MaterialTheme.colorScheme.onSurfaceVariant)
-            }
-        }
-
-        Spacer(Modifier.height(40.dp))
-
         // RF1: botón principal
         SleepButton(onClick = { sheetOpen = true })
 
-        Spacer(Modifier.height(40.dp))
+        Spacer(Modifier.height(32.dp))
+
+        // Alarmas: todas aquí, en la pantalla principal.
+        val allAlarms by context.app.repository.observeAlarms().collectAsState(initial = emptyList())
+        val nextId = vm.nextAlarm()?.first?.id
+        Overline("Alarmas")
+        Spacer(Modifier.height(8.dp))
+        if (allAlarms.isEmpty()) {
+            Text(
+                "Aún no tienes alarmas. Crea una para cada horario que necesites (por ejemplo, entre semana y fines de semana).",
+                style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            Spacer(Modifier.height(12.dp))
+        }
+        allAlarms.forEach { alarm ->
+            AlarmItem(alarm, isNext = alarm.id == nextId, onEdit = onEditAlarm)
+            Spacer(Modifier.height(12.dp))
+        }
+        NewAlarmButton(onNewAlarm)
+
+        Spacer(Modifier.height(32.dp))
 
         if (state.isFemale) {
             CycleCard(state.cycle, onPeriodToday = vm::periodStartedToday)
@@ -182,12 +178,10 @@ fun HomeScreen(
             }
         }
         Spacer(Modifier.height(20.dp))
-        NewAlarmButton(onNewAlarm)
-        Spacer(Modifier.height(20.dp))
     }
 
     if (sheetOpen) {
-        BedtimeSheet(vm, state, onDismiss = { sheetOpen = false }, onOpenAlarms = { sheetOpen = false; onOpenAlarms() }, onOpenSettings = { sheetOpen = false; onOpenSettings() }, onStarted = { sheetOpen = false; onNightStarted(it) })
+        BedtimeSheet(vm, state, onDismiss = { sheetOpen = false }, onOpenAlarms = { sheetOpen = false; onNewAlarm() }, onOpenSettings = { sheetOpen = false; onOpenSettings() }, onStarted = { sheetOpen = false; onNightStarted(it) })
     }
 }
 
